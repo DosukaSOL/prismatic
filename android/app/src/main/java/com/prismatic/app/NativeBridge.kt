@@ -54,9 +54,10 @@ object NativeBridge {
     external fun nativePresetName(index: Int): String
 
     /**
-     * Independent presentation layers for a real ROM. 2.5D (geometric tilt +
-     * tilt-shift) and the shader overlay are fully separable — either, both, or
-     * neither. [shaderParams] is a flat float array of [SHADER_PARAM_COUNT]
+     * Independent presentation layers for a real ROM. 2.5D (genuine per-pixel
+     * depth when the game renders 3D, else a geometric fallback), the shader
+     * overlay and [antialias] (FXAA edge smoothing) are fully separable — any
+     * combination. [shaderParams] is a flat float array of [SHADER_PARAM_COUNT]
      * values in ShaderParams order (see the SP_* indices).
      */
     external fun nativeSetPresentation(
@@ -64,8 +65,12 @@ object NativeBridge {
         enableShader: Boolean,
         tilt: Float,
         lantern: Boolean,
+        antialias: Boolean,
         shaderParams: FloatArray,
     )
+
+    /** Fast-forward multiplier for the loaded ROM: 1, 2 or 5. */
+    external fun nativeSetSpeed(mult: Int)
 
     /** Built-in shader presets (professional HD-2D looks). */
     external fun nativeShaderPresetCount(): Int

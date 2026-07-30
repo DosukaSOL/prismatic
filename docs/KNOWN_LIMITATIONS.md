@@ -5,6 +5,32 @@ Honest, evidence-based list of what PRISMATIC does **not** do (yet) or cannot be
 claimed to do. Nothing here is labeled "complete", "production ready", or "100%
 compatible".
 
+## v0.4.0 presentation — genuine depth 2.5D, and what it still is not
+
+- **Genuine per-pixel depth 2.5D is now shipped for the top screen.** When a game
+  renders through the DS 3D engine, the 2.5D layer displaces pixels by melonDS's
+  real depth buffer (DIBR), so the overworld gets true parallax — this is the path
+  earlier releases documented as future work. It is **live**, not a tilt.
+- **Only 3D-engine pixels have true depth.** 2D text, menus, sprites and HUD carry
+  **no scene depth** — they ride the base plane. Where a frame has no 3D depth at
+  all, the 2.5D layer falls back to the honest geometric tilt.
+- **The bottom screen is intentionally faithful.** Shader grade, 2.5D depth and
+  FXAA apply to the **top screen only**. The DS touch screen (map, menus, text) is
+  presented untouched by design, so the UI never overexposes or distorts.
+- **The "Diorama" preset is an analog, not a voxel reconstruction.** It combines
+  genuine depth, a tilt-shift framing and a depth-of-field pass to *evoke* the
+  DramaticShape voxel-mod look. It does **not** extrude voxels from map/tile data —
+  that is asset-level work only possible with a game's decompiled assets, not a
+  flat emulator framebuffer.
+- **DS Pokémon output is unverified on hardware here.** The maintainer's tooling
+  has no commercial DS Pokémon ROM and no device capture, so HGSS / SoulSilver /
+  Platinum have **not** been visually confirmed against the reference on real
+  hardware. On-device confirmation is a maintainer device test.
+- **The melonDS depth exposure is a local patch.** The depth buffer is surfaced by
+  in-tree edits to the melonDS submodule (which points at upstream); a fresh clone
+  needs that patch applied. Packaging it as a reproducible patch file is a
+  documented follow-up.
+
 ## v0.3.0 presentation — Shader Studio, presets, and the depth ceiling
 
 - **Shader Studio is real and live.** The 13 shader parameters, the 2.5D depth

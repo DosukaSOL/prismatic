@@ -226,6 +226,13 @@ public:
     virtual Image framebuffer(int screen) const = 0;
     virtual StructuredFrame structuredFrame(int screen) const = 0;
 
+    // Optional per-pixel depth for one screen, normalised 0 (near) .. 1 (far),
+    // same resolution as the framebuffer. Returns nullptr when this backend has
+    // no real depth for that screen (2D-only frame, GL renderer, wrong screen).
+    // Used to drive genuine depth-based 2.5D. The pointer is owned by the
+    // adapter and valid until the next advanceFrame().
+    virtual const FloatBuffer* depthBuffer(int /*screen*/) const { return nullptr; }
+
     // Pull up to maxFrames stereo audio sample-frames (interleaved L,R) produced
     // since the last call. Returns the number of frames written. Backends
     // without audio return 0. Safe to call from a dedicated audio thread.

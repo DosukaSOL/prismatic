@@ -13,6 +13,7 @@ data class GameEntry(
     val preset: String,
     val enable25D: Boolean,
     val enableShader: Boolean,
+    val tilt: Float,
     val notes: String,
 )
 
@@ -43,6 +44,7 @@ class GameRegistry private constructor(val games: List<GameEntry>) {
                         preset = o.optString("preset"),
                         enable25D = o.optBoolean("enable25D", false),
                         enableShader = o.optBoolean("enableShader", false),
+                        tilt = o.optDouble("tilt", 0.5).toFloat(),
                         notes = o.optString("notes"),
                     )
                 )

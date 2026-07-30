@@ -14,6 +14,7 @@ class ShaderLook {
     var enableShader = false
     var tilt = 0.5f
     var lantern = false
+    var antialias = false
     var params = FloatArray(NativeBridge.SHADER_PARAM_COUNT)
 
     fun copyFrom(other: ShaderLook) {
@@ -21,6 +22,7 @@ class ShaderLook {
         enableShader = other.enableShader
         tilt = other.tilt
         lantern = other.lantern
+        antialias = other.antialias
         params = other.params.copyOf()
     }
 
@@ -32,7 +34,7 @@ class ShaderLook {
  * can build a look once and re-apply it after rebooting the game.
  */
 object ShaderStore {
-    private const val VERSION = 1
+    private const val VERSION = 2
 
     private fun dir(ctx: Context): File = File(ctx.filesDir, "shaders").apply { mkdirs() }
 
@@ -50,6 +52,7 @@ object ShaderStore {
         sb.append(look.tilt).append(',')
         sb.append(if (look.lantern) 1 else 0)
         for (p in look.params) sb.append(',').append(p)
+        sb.append(',').append(if (look.antialias) 1 else 0)   // appended last (back-compat)
         File(dir(ctx), safeName(name) + ".txt").writeText(sb.toString())
         true
     } catch (e: Exception) {
@@ -70,6 +73,7 @@ object ShaderStore {
                 arr[i] = if (idx < parts.size) parts[idx].toFloatOrNull() ?: 0f else 0f
             }
             params = arr
+            antialias = (5 + n < parts.size) && parts[5 + n] == "1"
         }
     } catch (e: Exception) {
         null

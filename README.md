@@ -47,6 +47,50 @@ AMOLED, Android). First proof‑of‑concept: a DS‑shaped dual‑screen scene.
 > [Known limitations](docs/KNOWN_LIMITATIONS.md). No claim of "complete",
 > "production ready", or "100% compatible" is made anywhere.
 
+## 🆕 v0.4.0 — genuine depth 2.5D, a top‑screen‑only pipeline, and a games library
+
+This release makes the 2.5D **real**, keeps the DS touch screen honest, and turns
+the app into something you point at a folder and play from.
+
+- **Genuine depth‑based 2.5D (DIBR).** When a game renders with the DS 3D engine
+  (HGSS / SoulSilver / Platinum overworld), Prismatic now reads melonDS's real
+  **per‑pixel depth buffer** and displaces pixels by true scene depth — actual
+  parallax, not just a flat perspective tilt. Where there's no 3D depth it falls
+  back to the honest geometric tilt.
+- **Top‑screen only — the bottom screen stays faithful.** The shader grade, the
+  2.5D depth and FXAA now apply to the **top screen only**. The DS **bottom
+  screen** (menus, map, text, HUD) is presented untouched, so tweaking shaders no
+  longer overexposes or smears the touch UI.
+- **Transparent Shader Studio.** The editor is now a **translucent drawer** — you
+  keep a live, unobstructed preview of the game while you tune every parameter.
+- **Preset dropdown (your saved looks included).** Presets moved into a single
+  **dropdown menu**; the moment you save a custom look it appears in that same
+  list, prefixed ★, ready to re‑apply.
+- **New reference‑grade presets.** Added **Octopath**, **Lumen**, and **Diorama** —
+  the last tuned toward the warm, bright, miniature‑model "DramaticShape voxel
+  mod" diorama look, and auto‑applied to HGSS / SoulSilver / Platinum on top of
+  genuine depth.
+- **Optional anti‑aliasing (FXAA).** A conservative, edge‑only FXAA pass you can
+  toggle — on only when it helps, never softening the whole frame.
+- **Full button mapping.** A **Button mapping** menu (open it with **Back**) lets
+  you remap every AYN Thor button, set a dedicated **fast‑forward** key, and use
+  L2/R2 (great for macros — the DS has no back buttons). Speed cycles **1x → 2x →
+  5x**.
+- **Games folder library.** Point Prismatic at a **folder of ROMs**; it scans
+  every `.nds`, shows them in the menu, and labels each one **Compatible** or
+  **Untested** by reading the cartridge code from the header.
+- **Pokémon Platinum** joins the compatible list (USA/EUR/JPN) with the same
+  genuine depth 2.5D + Diorama profile.
+
+> Honesty note (2.5D): genuine depth only exists for **3D‑engine pixels**. 2D
+> text, menus and HUD have no scene depth and ride the base plane; the bottom
+> screen is deliberately left faithful. The **Diorama** preset is a real‑time
+> DIBR + tilt‑shift + depth‑of‑field **analog** to DramaticShape's asset‑level
+> voxel extrusion — not a literal voxel reconstruction (that needs a game's map
+> data). Commercial‑ROM output on DS Pokémon has **not** been verified on
+> hardware here; that remains a maintainer device test. Prismatic still ships
+> **no ROMs** — bring your own dump.
+
 ## 🆕 v0.3.0 — Shader Studio, a real menu, and a compatibility list
 
 This release turns the presentation layer into something you fully control, and

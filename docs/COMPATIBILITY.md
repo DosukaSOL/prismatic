@@ -13,15 +13,21 @@ presentation. This mirrors the in-app **Compatible Games** view
 
 | Game | Region | Code | Status | Recommended look |
 | --- | --- | --- | --- | --- |
-| Pokémon HeartGold | USA | `IPKE` | Playable | HD-2D (2.5D + shader) |
-| Pokémon SoulSilver | USA | `IPGE` | Playable | HD-2D (2.5D + shader) |
-| Pokémon HeartGold | EUR | `IPKP` | Playable | HD-2D (2.5D + shader) |
-| Pokémon SoulSilver | EUR | `IPGP` | Playable | HD-2D (2.5D + shader) |
-| Pokémon HeartGold | JPN | `IPKJ` | Playable | HD-2D (2.5D + shader) |
-| Pokémon SoulSilver | JPN | `IPGJ` | Playable | HD-2D (2.5D + shader) |
+| Pokémon HeartGold | USA | `IPKE` | Playable | Diorama (genuine depth 2.5D) |
+| Pokémon SoulSilver | USA | `IPGE` | Playable | Diorama (genuine depth 2.5D) |
+| Pokémon HeartGold | EUR | `IPKP` | Playable | Diorama (genuine depth 2.5D) |
+| Pokémon SoulSilver | EUR | `IPGP` | Playable | Diorama (genuine depth 2.5D) |
+| Pokémon HeartGold | JPN | `IPKJ` | Playable | Diorama (genuine depth 2.5D) |
+| Pokémon SoulSilver | JPN | `IPGJ` | Playable | Diorama (genuine depth 2.5D) |
+| Pokémon Platinum | USA | `CPUE` | Playable | Diorama (genuine depth 2.5D) |
+| Pokémon Platinum | EUR | `CPUP` | Playable | Diorama (genuine depth 2.5D) |
+| Pokémon Platinum | JPN | `CPUJ` | Playable | Diorama (genuine depth 2.5D) |
 
 ### Notes
 
+- **Genuine depth 2.5D** applies to the **top screen only**, and only to pixels
+  the DS 3D engine renders (the overworld). 2D text/menus and the entire **bottom
+  screen** are presented faithfully — see [Known limitations](KNOWN_LIMITATIONS.md).
 - **"Playable"** here means the title boots and runs through the Prismatic /
   melonDS path with the recommended HD-2D profile. It is **not** a claim of a
   full, hardware-certified playthrough — see

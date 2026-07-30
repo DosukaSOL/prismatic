@@ -42,6 +42,7 @@ struct PresentationOptions {
     bool  enableShader = false;  // post-process overlay (independent layer)
     float tilt = 0.5f;           // 0..1 strength of the 2.5D perspective
     bool  lantern = false;       // warm centre light ("lantern")
+    bool  antialias = false;     // FXAA edge smoothing on the final image
     ShaderParams shader;         // used when enableShader is set
 };
 
@@ -60,5 +61,13 @@ ShaderParams shaderParamsFromArray(const float* in);
 // resolution (e.g. 256x192); on-device the view scales the result, so no CPU
 // upscale is done here (keeps the per-frame cost low).
 Image renderEmulatorScreen(const Image& framebuffer, const PresentationOptions& opt);
+
+// Depth-aware variant. When 2.5D is enabled and a matching-resolution depth map
+// is supplied (normalised 0=near .. 1=far), the 2.5D layer is driven by genuine
+// per-pixel depth (real parallax + depth-of-field + depth darkening) instead of
+// the flat geometric tilt. Pass depth==nullptr to fall back to the geometric
+// path. Everything else (shader, AA) is identical.
+Image renderEmulatorScreen(const Image& framebuffer, const FloatBuffer* depth,
+                           const PresentationOptions& opt);
 
 }  // namespace prismatic

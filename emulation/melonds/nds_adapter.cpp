@@ -132,6 +132,14 @@ public:
         return (screen == (int)ScreenId::Bottom) ? bottom_ : top_;
     }
 
+    // Genuine per-pixel depth from the 3D engine, but only for the screen the 3D
+    // is actually composited to this frame (engine A -> top iff ScreenSwap). Null
+    // otherwise, so 2D-only screens never get warped by unrelated depth.
+    const FloatBuffer* depthBuffer(int screen) const override {
+        if (!hasDepth_ || screen != depthScreen_) return nullptr;
+        return &depth_;
+    }
+
     // Pull decoded stereo audio from the SPU. Called on the audio thread; the
     // SPU serialises internally, so no adapter-wide lock is taken here.
     int readAudio(int16_t* out, int maxFrames) override {
@@ -207,6 +215,44 @@ private:
         if (!nds_->GPU.GetFramebuffers(&topp, &botp)) return;  // GL renderer: no RAM buffers
         convert(reinterpret_cast<const uint32_t*>(topp), top_);
         convert(reinterpret_cast<const uint32_t*>(botp), bottom_);
+        readDepth();
+    }
+
+    // Copy the 3D rasteriser's 24-bit depth into a normalised 0(near)..1(far)
+    // buffer for the screen it belongs to. Detects "no real 3D this frame" by a
+    // near-flat depth span and disables the effect so 2D frames pass through.
+    void readDepth() {
+        hasDepth_ = false;
+        depthScreen_ = -1;
+        auto& rend = nds_->GPU.GetRenderer();
+        // Probe: gather raw min/max across the frame.
+        uint32_t lo = 0xFFFFFFFFu, hi = 0u;
+        bool any = false;
+        for (int y = 0; y < kDsH; ++y) {
+            uint32_t* dl = rend.GetDepth3DLine(y);
+            if (!dl) return;  // renderer keeps no CPU depth (e.g. GL)
+            for (int x = 0; x < kDsW; ++x) {
+                uint32_t z = dl[x] & 0x00FFFFFFu;
+                if (z < lo) lo = z;
+                if (z > hi) hi = z;
+            }
+            any = true;
+        }
+        // A flat span means there is no meaningful 3D geometry this frame.
+        constexpr uint32_t kMinSpan = 4096;
+        if (!any || hi <= lo || (hi - lo) < kMinSpan) return;
+
+        if (depth_.width != kDsW || depth_.height != kDsH) depth_ = FloatBuffer(kDsW, kDsH);
+        const float inv = 1.0f / (float)(hi - lo);
+        for (int y = 0; y < kDsH; ++y) {
+            uint32_t* dl = rend.GetDepth3DLine(y);
+            float* out = &depth_.data[(size_t)y * kDsW];
+            for (int x = 0; x < kDsW; ++x)
+                out[x] = (float)((dl[x] & 0x00FFFFFFu) - lo) * inv;  // 0 near .. 1 far
+        }
+        // Engine A carries the 3D; it maps to the top screen only when swapped.
+        depthScreen_ = nds_->GPU.ScreenSwap ? (int)ScreenId::Top : (int)ScreenId::Bottom;
+        hasDepth_ = true;
     }
 
     static void convert(const uint32_t* src, Image& dst) {
@@ -217,6 +263,9 @@ private:
     std::unique_ptr<melonDS::NDS> nds_;
     Image top_{kDsW, kDsH};
     Image bottom_{kDsW, kDsH};
+    FloatBuffer depth_;            // normalised 0(near)..1(far) for depthScreen_
+    int depthScreen_ = -1;        // ScreenId of the screen the 3D is drawn to
+    bool hasDepth_ = false;       // false => no usable 3D depth this frame
     InputState input_;
     uint64_t frame_ = 0;
     GameIdentity id_;

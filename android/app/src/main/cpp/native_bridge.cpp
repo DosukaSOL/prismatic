@@ -39,6 +39,7 @@ bool g_isNds = false;         // true once a real DS ROM is loaded
 InputState g_input;           // single source of truth, applied each frame
 PresentationOptions g_present;// 2.5D / shader toggles for the real-ROM path
 bool g_enableJit = true;      // applied on the next ROM (re)load
+int  g_speed = 1;             // fast-forward multiplier (1, 2 or 5)
 
 // Audio hand-off. The emulation thread (under g_mtx, inside nativeRenderTop)
 // drains the core's SPU into g_audioBuf; the Kotlin AudioTrack thread pulls
@@ -223,10 +224,9 @@ Java_com_prismatic_app_NativeBridge_nativeRenderTop(
     std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_backend) return nullptr;
     g_backend->setInput(g_input);
-    g_backend->advanceFrame();
 
-    if (g_isNds) {
-        // Drain the frame's audio into the ring for the AudioTrack thread.
+    // Drain a frame's audio into the ring for the AudioTrack thread (NDS only).
+    auto drainAudio = [&]() {
         int16_t tmp[2048];
         int f;
         while ((f = g_backend->readAudio(tmp, 1024)) > 0) {
@@ -237,9 +237,21 @@ Java_com_prismatic_app_NativeBridge_nativeRenderTop(
                                  g_audioBuf.begin() + (g_audioBuf.size() - kAudioMaxShorts));
             if (f < 1024) break;
         }
+    };
+
+    // Fast-forward: run extra emulation steps per presented frame (NDS only). The
+    // display loop stays at ~60 fps, so 2x/5x speed = 120/300 emulated fps.
+    const int steps = g_isNds ? (g_speed < 1 ? 1 : g_speed) : 1;
+    for (int s = 0; s < steps; ++s) {
+        g_backend->advanceFrame();
+        if (g_isNds) drainAudio();
+    }
+
+    if (g_isNds) {
         PresentationOptions o = g_present;
         Image fb = g_backend->framebuffer(static_cast<int>(ScreenId::Top));
-        return toArgbArray(env, renderEmulatorScreen(fb, o));
+        const FloatBuffer* depth = g_backend->depthBuffer(static_cast<int>(ScreenId::Top));
+        return toArgbArray(env, renderEmulatorScreen(fb, depth, o));
     }
 
     if (!g_pipe) return nullptr;
@@ -256,9 +268,12 @@ Java_com_prismatic_app_NativeBridge_nativeRenderBottom(
     if (!g_backend) return nullptr;
 
     if (g_isNds) {
-        PresentationOptions o = g_present;
+        // Bottom screen is the DS touch UI (menus, map, text, HUD). Present it
+        // faithfully: the shader grade, 2.5D depth and FXAA are TOP-screen only.
+        // Applying them here overexposes the UI and smears text.
+        PresentationOptions o;  // defaults = faithful passthrough
         Image fb = g_backend->framebuffer(static_cast<int>(ScreenId::Bottom));
-        return toArgbArray(env, renderEmulatorScreen(fb, o));
+        return toArgbArray(env, renderEmulatorScreen(fb, nullptr, o));
     }
 
     if (!g_pipe) return nullptr;
@@ -267,25 +282,34 @@ Java_com_prismatic_app_NativeBridge_nativeRenderBottom(
     return toArgbArray(env, r.enhanced);
 }
 
-// Independent presentation layers for the real-ROM path. 2.5D (geometric tilt +
-// tilt-shift) and the shader overlay are fully separable: either, both, or
-// neither. `shaderParams` is a flat float[kShaderParamCount] in ShaderParams
-// declaration order (see emulator_present.hpp), so the on-device editor can send
-// any user-made look.
+// Independent presentation layers for the real-ROM path. 2.5D (genuine per-pixel
+// depth when the game renders 3D, else a geometric fallback), the shader overlay
+// and FXAA edge smoothing are fully separable: any combination. `shaderParams`
+// is a flat float[kShaderParamCount] in ShaderParams declaration order (see
+// emulator_present.hpp), so the on-device editor can send any user-made look.
 JNIEXPORT void JNICALL
 Java_com_prismatic_app_NativeBridge_nativeSetPresentation(
         JNIEnv* env, jobject, jboolean enable25D, jboolean enableShader,
-        jfloat tilt, jboolean lantern, jfloatArray shaderParams) {
+        jfloat tilt, jboolean lantern, jboolean antialias, jfloatArray shaderParams) {
     std::lock_guard<std::mutex> lock(g_mtx);
     g_present.enable25D = (enable25D == JNI_TRUE);
     g_present.enableShader = (enableShader == JNI_TRUE);
     g_present.tilt = tilt;
     g_present.lantern = (lantern == JNI_TRUE);
+    g_present.antialias = (antialias == JNI_TRUE);
     if (shaderParams && env->GetArrayLength(shaderParams) >= kShaderParamCount) {
         float buf[kShaderParamCount];
         env->GetFloatArrayRegion(shaderParams, 0, kShaderParamCount, buf);
         g_present.shader = shaderParamsFromArray(buf);
     }
+}
+
+// Fast-forward multiplier for the real-ROM path: 1x, 2x or 5x. Runs extra
+// emulation steps per presented frame (audio is sped up / dropped accordingly).
+JNIEXPORT void JNICALL
+Java_com_prismatic_app_NativeBridge_nativeSetSpeed(JNIEnv*, jobject, jint mult) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    g_speed = (mult == 2 || mult == 5) ? mult : 1;
 }
 
 // Number of built-in shader presets.

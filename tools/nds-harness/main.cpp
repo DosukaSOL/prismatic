@@ -64,6 +64,48 @@ int main(int argc, char** argv) {
         }
         PresentationOptions o; o.enable25D = true; w("25d", renderEmulatorScreen(img, o));
         o.enableShader = true; o.shader = shaderPreset(0); w("both", renderEmulatorScreen(img, o));
+
+        // Genuine depth-based 2.5D preview: a small diorama scene with a real
+        // depth map (0 near .. 1 far) so parallax / DoF / depth-darkening show.
+        Image scene(256, 192);
+        FloatBuffer depth(256, 192);
+        auto put = [&](int x, int y, Color c, float d) {
+            if (x < 0 || y < 0 || x >= 256 || y >= 192) return;
+            scene.at(x, y) = c; depth.at(x, y) = d;
+        };
+        for (int y = 0; y < 192; ++y)
+            for (int x = 0; x < 256; ++x) {
+                float gd = 0.15f + 0.75f * (1.0f - y / 191.0f);   // ground recedes upward
+                bool ck = ((x >> 4) ^ (y >> 4)) & 1;
+                put(x, y, Color{(uint8_t)(ck ? 70 : 54), (uint8_t)(ck ? 130 : 108),
+                                (uint8_t)(ck ? 72 : 58), 255}, gd);
+            }
+        for (int y = 30; y < 120; ++y)                            // building (far-mid)
+            for (int x = 180; x < 230; ++x) put(x, y, Color{150, 150, 160, 255}, 0.70f);
+        for (int y = 24; y < 112; ++y)                            // tree trunk+canopy (mid)
+            for (int x = 40; x < 74; ++x)
+                put(x, y, Color{(uint8_t)(y < 70 ? 40 : 90), (uint8_t)(y < 70 ? 120 : 70),
+                                (uint8_t)(y < 70 ? 50 : 40), 255}, 0.50f);
+        for (int y = 96; y < 150; ++y)                            // character (near)
+            for (int x = 110; x < 146; ++x) put(x, y, Color{210, 70, 60, 255}, 0.22f);
+        for (int i = 0; i < 192; ++i) {                           // diagonal edge (AA test)
+            int x = 20 + i; if (x < 256) { scene.at(x, i) = Color{250, 250, 250, 255}; }
+        }
+        w("scene_native", scene);
+        { PresentationOptions d; d.enable25D = true;
+          w("depth25d", renderEmulatorScreen(scene, &depth, d)); }
+        { PresentationOptions d; d.enable25D = true; d.enableShader = true;
+          d.shader = shaderPreset(1);  // Octopath
+          w("depth25d_octopath", renderEmulatorScreen(scene, &depth, d)); }
+        { PresentationOptions aa; aa.antialias = true;
+          w("aa", renderEmulatorScreen(scene, nullptr, aa)); }
+        {   // Full HGSS/Platinum profile: genuine depth 2.5D + Diorama grade + FXAA.
+            int di = 0; for (int i = 0; i < shaderPresetCount(); ++i)
+                if (std::string(shaderPresetName(i)) == "Diorama") { di = i; break; }
+            PresentationOptions d; d.enable25D = true; d.enableShader = true;
+            d.antialias = true; d.tilt = 0.6f; d.shader = shaderPreset(di);
+            w("depth25d_diorama", renderEmulatorScreen(scene, &depth, d)); }
+
         std::printf("Wrote pattern previews to %s\n", outDir.string().c_str());
         return 0;
     }

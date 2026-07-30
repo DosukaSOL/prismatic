@@ -6,60 +6,99 @@
       "title": "Pokémon HeartGold",
       "region": "USA",
       "status": "Playable",
-      "preset": "HD-2D",
+      "preset": "Diorama",
       "enable25D": true,
       "enableShader": true,
-      "notes": "Full HD-2D pass: warm key light, soft bloom, gentle depth tilt."
+      "tilt": 0.6,
+      "notes": "Genuine depth 2.5D — DramaticShape voxel-mod diorama look: warm daylight, tilt-shift DoF, depth AO."
     },
     {
       "code": "IPGE",
       "title": "Pokémon SoulSilver",
       "region": "USA",
       "status": "Playable",
-      "preset": "HD-2D",
+      "preset": "Diorama",
       "enable25D": true,
       "enableShader": true,
-      "notes": "Full HD-2D pass: warm key light, soft bloom, gentle depth tilt."
+      "tilt": 0.6,
+      "notes": "Genuine depth 2.5D — DramaticShape voxel-mod diorama look: warm daylight, tilt-shift DoF, depth AO."
     },
     {
       "code": "IPKP",
       "title": "Pokémon HeartGold",
       "region": "EUR",
       "status": "Playable",
-      "preset": "HD-2D",
+      "preset": "Diorama",
       "enable25D": true,
       "enableShader": true,
-      "notes": "European release. Same HD-2D profile."
+      "tilt": 0.6,
+      "notes": "European release. Genuine depth 2.5D diorama profile."
     },
     {
       "code": "IPGP",
       "title": "Pokémon SoulSilver",
       "region": "EUR",
       "status": "Playable",
-      "preset": "HD-2D",
+      "preset": "Diorama",
       "enable25D": true,
       "enableShader": true,
-      "notes": "European release. Same HD-2D profile."
+      "tilt": 0.6,
+      "notes": "European release. Genuine depth 2.5D diorama profile."
     },
     {
       "code": "IPKJ",
       "title": "Pokémon HeartGold",
       "region": "JPN",
       "status": "Playable",
-      "preset": "HD-2D",
+      "preset": "Diorama",
       "enable25D": true,
       "enableShader": true,
-      "notes": "Japanese release. Same HD-2D profile."
+      "tilt": 0.6,
+      "notes": "Japanese release. Genuine depth 2.5D diorama profile."
     },
     {
       "code": "IPGJ",
       "title": "Pokémon SoulSilver",
       "region": "JPN",
       "status": "Playable",
-      "preset": "HD-2D",
+      "preset": "Diorama",
       "enable25D": true,
       "enableShader": true,
-      "notes": "Japanese release. Same HD-2D profile."
+      "tilt": 0.6,
+      "notes": "Japanese release. Genuine depth 2.5D diorama profile."
+    },
+    {
+      "code": "CPUE",
+      "title": "Pokémon Platinum",
+      "region": "USA",
+      "status": "Playable",
+      "preset": "Diorama",
+      "enable25D": true,
+      "enableShader": true,
+      "tilt": 0.6,
+      "notes": "Genuine depth 2.5D — same diorama pass as HGSS: warm daylight, tilt-shift DoF, depth AO."
+    },
+    {
+      "code": "CPUP",
+      "title": "Pokémon Platinum",
+      "region": "EUR",
+      "status": "Playable",
+      "preset": "Diorama",
+      "enable25D": true,
+      "enableShader": true,
+      "tilt": 0.6,
+      "notes": "European release. Genuine depth 2.5D diorama profile."
+    },
+    {
+      "code": "CPUJ",
+      "title": "Pokémon Platinum",
+      "region": "JPN",
+      "status": "Playable",
+      "preset": "Diorama",
+      "enable25D": true,
+      "enableShader": true,
+      "tilt": 0.6,
+      "notes": "Japanese release. Genuine depth 2.5D diorama profile."
     }
   ]
 }
