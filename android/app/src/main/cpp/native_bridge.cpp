@@ -196,6 +196,13 @@ Java_com_prismatic_app_NativeBridge_nativeUnloadRom(JNIEnv*, jobject) {
     g_input = InputState{};
 }
 
+// Force the loaded game's battery save to disk now (used by "Save & Close").
+JNIEXPORT void JNICALL
+Java_com_prismatic_app_NativeBridge_nativeFlushSave(JNIEnv*, jobject) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (g_backend && g_isNds) g_backend->flushSave();
+}
+
 // Internal title of the loaded game (empty if none / synthetic).
 JNIEXPORT jstring JNICALL
 Java_com_prismatic_app_NativeBridge_nativeGameTitle(JNIEnv* env, jobject) {
@@ -231,8 +238,6 @@ Java_com_prismatic_app_NativeBridge_nativeRenderTop(
             if (f < 1024) break;
         }
         PresentationOptions o = g_present;
-        o.timeOfDay = timeOfDay;
-        o.lantern = g_lantern;
         Image fb = g_backend->framebuffer(static_cast<int>(ScreenId::Top));
         return toArgbArray(env, renderEmulatorScreen(fb, o));
     }
@@ -252,8 +257,6 @@ Java_com_prismatic_app_NativeBridge_nativeRenderBottom(
 
     if (g_isNds) {
         PresentationOptions o = g_present;
-        o.timeOfDay = timeOfDay;
-        o.lantern = g_lantern;
         Image fb = g_backend->framebuffer(static_cast<int>(ScreenId::Bottom));
         return toArgbArray(env, renderEmulatorScreen(fb, o));
     }
@@ -264,16 +267,63 @@ Java_com_prismatic_app_NativeBridge_nativeRenderBottom(
     return toArgbArray(env, r.enhanced);
 }
 
-// Independent presentation toggles for the real-ROM path. 2.5D (geometric tilt +
+// Independent presentation layers for the real-ROM path. 2.5D (geometric tilt +
 // tilt-shift) and the shader overlay are fully separable: either, both, or
-// neither. `style`: 0=CRT 1=LCD 2=Warm 3=Night 4=Vivid.
+// neither. `shaderParams` is a flat float[kShaderParamCount] in ShaderParams
+// declaration order (see emulator_present.hpp), so the on-device editor can send
+// any user-made look.
 JNIEXPORT void JNICALL
 Java_com_prismatic_app_NativeBridge_nativeSetPresentation(
-        JNIEnv*, jobject, jboolean enable25D, jboolean enableShader, jint style) {
+        JNIEnv* env, jobject, jboolean enable25D, jboolean enableShader,
+        jfloat tilt, jboolean lantern, jfloatArray shaderParams) {
     std::lock_guard<std::mutex> lock(g_mtx);
     g_present.enable25D = (enable25D == JNI_TRUE);
     g_present.enableShader = (enableShader == JNI_TRUE);
-    g_present.shaderStyle = static_cast<int>(style);
+    g_present.tilt = tilt;
+    g_present.lantern = (lantern == JNI_TRUE);
+    if (shaderParams && env->GetArrayLength(shaderParams) >= kShaderParamCount) {
+        float buf[kShaderParamCount];
+        env->GetFloatArrayRegion(shaderParams, 0, kShaderParamCount, buf);
+        g_present.shader = shaderParamsFromArray(buf);
+    }
+}
+
+// Number of built-in shader presets.
+JNIEXPORT jint JNICALL
+Java_com_prismatic_app_NativeBridge_nativeShaderPresetCount(JNIEnv*, jobject) {
+    return static_cast<jint>(shaderPresetCount());
+}
+
+// Display name of a built-in shader preset.
+JNIEXPORT jstring JNICALL
+Java_com_prismatic_app_NativeBridge_nativeShaderPresetName(JNIEnv* env, jobject, jint index) {
+    return env->NewStringUTF(shaderPresetName(index));
+}
+
+// A built-in preset's parameters as float[kShaderParamCount], for loading into
+// the editor.
+JNIEXPORT jfloatArray JNICALL
+Java_com_prismatic_app_NativeBridge_nativeShaderPreset(JNIEnv* env, jobject, jint index) {
+    float buf[kShaderParamCount];
+    shaderParamsToArray(shaderPreset(index), buf);
+    jfloatArray out = env->NewFloatArray(kShaderParamCount);
+    if (out) env->SetFloatArrayRegion(out, 0, kShaderParamCount, buf);
+    return out;
+}
+
+// 4-character cartridge code of the loaded ROM (empty if none). Used to look up
+// per-game recommendations in the compatibility registry.
+JNIEXPORT jstring JNICALL
+Java_com_prismatic_app_NativeBridge_nativeGameCode(JNIEnv* env, jobject) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_backend || !g_isNds) return env->NewStringUTF("");
+    return env->NewStringUTF(g_backend->identity().gameCode.c_str());
+}
+
+// Number of shader parameters in the transport vector (keeps Kotlin in sync).
+JNIEXPORT jint JNICALL
+Java_com_prismatic_app_NativeBridge_nativeShaderParamCount(JNIEnv*, jobject) {
+    return static_cast<jint>(kShaderParamCount);
 }
 
 // Speed mode: JIT on = fast, off = maximum compatibility. Applied on next load.

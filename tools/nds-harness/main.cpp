@@ -58,12 +58,12 @@ int main(int argc, char** argv) {
             writePng((outDir / (std::string("pat_") + t + ".png")).string(), im);
         };
         w("native", img);
-        for (int st = 0; st < 5; ++st) {
-            PresentationOptions o; o.enableShader = true; o.shaderStyle = st; o.timeOfDay = 13.0f;
-            w("shader" + std::to_string(st), renderEmulatorScreen(img, o));
+        for (int st = 0; st < shaderPresetCount(); ++st) {
+            PresentationOptions o; o.enableShader = true; o.shader = shaderPreset(st);
+            w(std::string("shader_") + shaderPresetName(st), renderEmulatorScreen(img, o));
         }
         PresentationOptions o; o.enable25D = true; w("25d", renderEmulatorScreen(img, o));
-        o.enableShader = true; o.shaderStyle = 2; w("both", renderEmulatorScreen(img, o));
+        o.enableShader = true; o.shader = shaderPreset(0); w("both", renderEmulatorScreen(img, o));
         std::printf("Wrote pattern previews to %s\n", outDir.string().c_str());
         return 0;
     }
@@ -116,11 +116,9 @@ int main(int argc, char** argv) {
     // the four combinations can be eyeballed.
     fs::create_directories(outDir, ec);
     const char* names[2] = {"top", "bottom"};
-    int shaderStyle = 0;
-    if (preset.find("LCD") != std::string::npos) shaderStyle = 1;
-    else if (preset.find("Warm") != std::string::npos) shaderStyle = 2;
-    else if (preset.find("Night") != std::string::npos) shaderStyle = 3;
-    else if (preset.find("Vivid") != std::string::npos) shaderStyle = 4;
+    int presetIdx = 0;
+    for (int i = 0; i < shaderPresetCount(); ++i)
+        if (preset.find(shaderPresetName(i)) != std::string::npos) { presetIdx = i; break; }
 
     auto write = [&](const std::string& tag, const Image& img) {
         writePng((outDir / (std::string("nds_") + tag + ".png")).string(), img);
@@ -130,14 +128,14 @@ int main(int argc, char** argv) {
         write(std::string(names[s]) + "_native", fb);
 
         PresentationOptions o;
-        o.timeOfDay = 20.0f; o.shaderStyle = shaderStyle;
+        o.shader = shaderPreset(presetIdx);
         auto e0 = std::chrono::high_resolution_clock::now();
         o.enable25D = true;  o.enableShader = false; write(std::string(names[s]) + "_25d",    renderEmulatorScreen(fb, o));
         o.enable25D = false; o.enableShader = true;  write(std::string(names[s]) + "_shader", renderEmulatorScreen(fb, o));
         o.enable25D = true;  o.enableShader = true;  Image both = renderEmulatorScreen(fb, o);
         auto e1 = std::chrono::high_resolution_clock::now();
         write(std::string(names[s]) + "_both", both);
-        std::printf("[%s] 2.5D+shader style %d, %dx%d, ~%.2f ms\n", names[s], shaderStyle,
+        std::printf("[%s] 2.5D+shader '%s', %dx%d, ~%.2f ms\n", names[s], shaderPresetName(presetIdx),
                     both.width, both.height,
                     std::chrono::duration<double, std::milli>(e1 - e0).count() / 3.0);
     }

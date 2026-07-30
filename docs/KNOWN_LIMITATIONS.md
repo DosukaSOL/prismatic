@@ -5,6 +5,32 @@ Honest, evidence-based list of what PRISMATIC does **not** do (yet) or cannot be
 claimed to do. Nothing here is labeled "complete", "production ready", or "100%
 compatible".
 
+## v0.3.0 presentation — Shader Studio, presets, and the depth ceiling
+
+- **Shader Studio is real and live.** The 13 shader parameters, the 2.5D depth
+  tilt, and the lantern are all user-tweakable on-device, apply instantly to the
+  running frame, and can be saved/loaded as named looks. This is a **screen-space
+  post pipeline** — it re-grades the finished image; it does not change emulation.
+- **The five presets (HD-2D/CRT/LCD/Night/Vivid) are tuning, not new geometry.**
+  The "HD-2D" preset is a warm, softly-bloomed grade tuned to *evoke* an
+  Octopath-like mood; it is **not** an Octopath renderer.
+- **The 2.5D depth is still geometric (a tilt), not a per-object diorama.** See
+  the boundary below — this did not change in v0.3.0, and the depth-aware path is
+  documented but **not shipped**.
+- **A concrete path to *real* per-pixel depth exists but is unverified.** melonDS's
+  software rasteriser keeps a real per-pixel **depth buffer** for 3D-engine pixels
+  (`third_party/melonDS/src/GPU3D_Soft.h:476`, `u32 DepthBuffer[...]`, written at
+  `GPU3D_Soft.cpp:598`). Exposing it would let the 2.5D layer displace pixels by
+  true scene depth for HGSS's 3D overworld. It is **not** implemented because it
+  requires patching melonDS across `Renderer3D`/`GPU3D`/`GPU` to surface the
+  buffer, only covers 3D-engine pixels (not 2D text/menus), and needs on-hardware
+  tuning the maintainer hasn't done yet. Shipping it unverified would violate the
+  honesty rule, so it stays a documented future step.
+- **Per-game auto-profiles are metadata, not a compatibility guarantee.** The
+  compatibility registry (`assets/games.json`) maps a cartridge code to a
+  recommended look; it does **not** assert a title has been fully played through
+  on hardware here.
+
 ## v0.2.0 presentation — what the "2.5D" is and is not
 
 - **The real-ROM "2.5D" is a geometric perspective tilt + tilt-shift, not a true

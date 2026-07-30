@@ -1,0 +1,65 @@
+{
+  "note": "Prismatic compatibility registry. 'code' is the 4-char DS cartridge code (ROM header 0x0C). Prismatic never ships ROMs — bring your own dump.",
+  "games": [
+    {
+      "code": "IPKE",
+      "title": "Pokémon HeartGold",
+      "region": "USA",
+      "status": "Playable",
+      "preset": "HD-2D",
+      "enable25D": true,
+      "enableShader": true,
+      "notes": "Full HD-2D pass: warm key light, soft bloom, gentle depth tilt."
+    },
+    {
+      "code": "IPGE",
+      "title": "Pokémon SoulSilver",
+      "region": "USA",
+      "status": "Playable",
+      "preset": "HD-2D",
+      "enable25D": true,
+      "enableShader": true,
+      "notes": "Full HD-2D pass: warm key light, soft bloom, gentle depth tilt."
+    },
+    {
+      "code": "IPKP",
+      "title": "Pokémon HeartGold",
+      "region": "EUR",
+      "status": "Playable",
+      "preset": "HD-2D",
+      "enable25D": true,
+      "enableShader": true,
+      "notes": "European release. Same HD-2D profile."
+    },
+    {
+      "code": "IPGP",
+      "title": "Pokémon SoulSilver",
+      "region": "EUR",
+      "status": "Playable",
+      "preset": "HD-2D",
+      "enable25D": true,
+      "enableShader": true,
+      "notes": "European release. Same HD-2D profile."
+    },
+    {
+      "code": "IPKJ",
+      "title": "Pokémon HeartGold",
+      "region": "JPN",
+      "status": "Playable",
+      "preset": "HD-2D",
+      "enable25D": true,
+      "enableShader": true,
+      "notes": "Japanese release. Same HD-2D profile."
+    },
+    {
+      "code": "IPGJ",
+      "title": "Pokémon SoulSilver",
+      "region": "JPN",
+      "status": "Playable",
+      "preset": "HD-2D",
+      "enable25D": true,
+      "enableShader": true,
+      "notes": "Japanese release. Same HD-2D profile."
+    }
+  ]
+}

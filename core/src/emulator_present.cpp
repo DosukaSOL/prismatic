@@ -115,50 +115,28 @@ Image apply25D(const Image& src, float tilt) {
     return out;
 }
 
-// ---- Layer 2: shader overlay (colour grade / bloom / scanlines) --------------
-// A tasteful post-process applied on top of whatever layer 1 produced. Styles
-// are deliberately restrained so colours stay faithful.
-Image applyShader(const Image& src, int style, float timeOfDay, bool lantern) {
+// ---- Layer 2: shader overlay (fully user-tweakable post-process) -------------
+// Every control below maps to a slider in the on-device editor. Order of
+// operations is a conventional grading chain; neutral params leave the image
+// unchanged so "shader on, all defaults" == faithful.
+Image applyShader(const Image& src, const ShaderParams& p, bool lantern) {
     const int W = src.width, H = src.height;
     std::vector<F3> c((size_t)W * H);
     for (int i = 0; i < W * H; ++i) c[i] = toF(src.pixels[i]);
 
-    // Day/night grade (subtle): dusk warms, night cools + dims.
-    float t = timeOfDay;
-    float night = smoothstep(6.0f, 2.0f, t) + smoothstep(18.0f, 22.0f, t);  // 0 day..1 night
-    night = clampf(night, 0.0f, 1.0f);
-    F3 nightTint{0.80f, 0.86f, 1.08f};
-    float nightExposure = lerpf(1.0f, 0.82f, night);
+    // Unsharp mask source (blurred copy), only if requested.
+    std::vector<F3> soft;
+    if (p.sharpen > 0.001f) soft = boxBlur(c, W, H, 1);
 
-    // Style parameters.
-    float exposure = nightExposure, contrast = 1.0f, saturation = 1.0f, vignette = 0.12f;
-    float bloomThresh = 0.75f, bloomAmt = 0.0f, scan = 0.0f, grid = 0.0f;
-    F3 grade{1, 1, 1};
-    switch (style) {
-        case 0:  // CRT
-            bloomAmt = 0.35f; scan = 0.18f; vignette = 0.18f; grade = {1.04f, 1.0f, 0.96f};
-            break;
-        case 1:  // LCD (handheld)
-            grid = 0.10f; contrast = 1.06f; saturation = 1.05f; vignette = 0.08f;
-            break;
-        case 2:  // Warm cinematic
-            bloomAmt = 0.30f; vignette = 0.20f; grade = {1.08f, 1.0f, 0.92f}; saturation = 1.06f;
-            break;
-        case 3:  // Night
-            exposure *= 0.9f; bloomAmt = 0.28f; vignette = 0.26f; grade = {0.88f, 0.94f, 1.12f};
-            break;
-        default: // Vivid
-            contrast = 1.12f; saturation = 1.22f; bloomAmt = 0.18f; vignette = 0.10f;
-            break;
-    }
-
-    // Bloom source.
-    std::vector<F3> bright((size_t)W * H, F3{0, 0, 0});
-    if (bloomAmt > 0) {
+    // Bloom source: bright areas, blurred, added back.
+    std::vector<F3> bright;
+    if (p.bloom > 0.001f) {
+        bright.assign((size_t)W * H, F3{0, 0, 0});
+        float thr = clampf(p.bloomThreshold, 0.0f, 1.0f);
         for (int i = 0; i < W * H; ++i) {
             float l = luma(c[i]);
-            if (l > bloomThresh) {
-                float k = (l - bloomThresh) / (1.0f - bloomThresh + 1e-4f);
+            if (l > thr) {
+                float k = (l - thr) / (1.0f - thr + 1e-4f);
                 bright[i] = {c[i].r * k, c[i].g * k, c[i].b * k};
             }
         }
@@ -166,37 +144,59 @@ Image applyShader(const Image& src, int style, float timeOfDay, bool lantern) {
         bright = boxBlur(bright, W, H, 4);
     }
 
+    const float exposure = clampf(p.exposure, 0.0f, 4.0f);
+    const float contrast = clampf(p.contrast, 0.0f, 4.0f);
+    const float saturation = clampf(p.saturation, 0.0f, 4.0f);
+    const float temp = clampf(p.temperature, -1.0f, 1.0f);
+    const float tint = clampf(p.tint, -1.0f, 1.0f);
+    const float invGamma = 1.0f / clampf(p.gamma, 0.1f, 6.0f);
+    const float vignette = clampf(p.vignette, 0.0f, 1.0f);
+    const float scan = clampf(p.scanline, 0.0f, 1.0f);
+    const float grid = clampf(p.lcdGrid, 0.0f, 1.0f);
+    const float sharpen = clampf(p.sharpen, 0.0f, 1.0f);
+    const float bloom = clampf(p.bloom, 0.0f, 1.0f);
+
     Image out(W, H);
-    float cxn = (W - 1) * 0.5f, cyn = (H - 1) * 0.5f;
+    const float cxn = (W - 1) * 0.5f, cyn = (H - 1) * 0.5f;
     for (int y = 0; y < H; ++y)
         for (int x = 0; x < W; ++x) {
-            size_t i = (size_t)y * W + x;
+            const size_t i = (size_t)y * W + x;
             F3 v = c[i];
-            // Day/night.
-            v = {lerpf(v.r, v.r * nightTint.r, night), lerpf(v.g, v.g * nightTint.g, night),
-                 lerpf(v.b, v.b * nightTint.b, night)};
-            v = {v.r * exposure, v.g * exposure, v.b * exposure};
+            // Sharpen (unsharp mask).
+            if (sharpen > 0.001f) {
+                const F3& b = soft[i];
+                v = {v.r + (v.r - b.r) * sharpen, v.g + (v.g - b.g) * sharpen,
+                     v.b + (v.b - b.b) * sharpen};
+            }
+            // Exposure then brightness (the "luminance of light").
+            v = {v.r * exposure + p.brightness * 0.5f, v.g * exposure + p.brightness * 0.5f,
+                 v.b * exposure + p.brightness * 0.5f};
             // Bloom.
-            if (bloomAmt > 0) { v.r += bright[i].r * bloomAmt; v.g += bright[i].g * bloomAmt; v.b += bright[i].b * bloomAmt; }
+            if (bloom > 0.001f) { v.r += bright[i].r * bloom; v.g += bright[i].g * bloom; v.b += bright[i].b * bloom; }
             // Contrast around mid grey.
-            v = {(v.r - 0.5f) * contrast + 0.5f, (v.g - 0.5f) * contrast + 0.5f, (v.b - 0.5f) * contrast + 0.5f};
+            v = {(v.r - 0.5f) * contrast + 0.5f, (v.g - 0.5f) * contrast + 0.5f,
+                 (v.b - 0.5f) * contrast + 0.5f};
             // Saturation.
             float l = luma(v);
             v = {lerpf(l, v.r, saturation), lerpf(l, v.g, saturation), lerpf(l, v.b, saturation)};
-            // Grade.
-            v = {v.r * grade.r, v.g * grade.g, v.b * grade.b};
-            // Lantern warm centre light (night).
+            // White balance: temperature (R<->B) and tint (G<->magenta).
+            v = {v.r * (1.0f + 0.20f * temp), v.g * (1.0f - 0.16f * tint),
+                 v.b * (1.0f - 0.20f * temp)};
+            // Gamma.
+            v = {std::pow(clampf(v.r, 0, 1), invGamma), std::pow(clampf(v.g, 0, 1), invGamma),
+                 std::pow(clampf(v.b, 0, 1), invGamma)};
+            // Lantern warm centre light.
             if (lantern) {
                 float dx = (x - cxn) / W, dy = (y - cyn) / H;
                 float d = std::sqrt(dx * dx + dy * dy);
-                float g = (1.0f - smoothstep(0.05f, 0.5f, d)) * 0.35f * (0.4f + 0.6f * night);
-                v = {v.r + g * 1.0f, v.g + g * 0.72f, v.b + g * 0.38f};
+                float g = (1.0f - smoothstep(0.05f, 0.5f, d)) * 0.35f;
+                v = {v.r + g, v.g + g * 0.72f, v.b + g * 0.38f};
             }
-            // Scanlines (CRT) — darken alternate native rows; stays crisp when
-            // the view nearest-scales the frame.
-            if (scan > 0 && (y & 1)) { v = {v.r * (1 - scan), v.g * (1 - scan), v.b * (1 - scan)}; }
+            // Scanlines (CRT) — darken alternate native rows.
+            if (scan > 0 && (y & 1)) v = {v.r * (1 - scan), v.g * (1 - scan), v.b * (1 - scan)};
             // LCD pixel grid — faint dark border on alternate columns/rows.
-            if (grid > 0 && ((x & 1) || (y & 1))) { v = {v.r * (1 - grid), v.g * (1 - grid), v.b * (1 - grid)}; }
+            if (grid > 0 && ((x & 1) || (y & 1)))
+                v = {v.r * (1 - grid), v.g * (1 - grid), v.b * (1 - grid)};
             // Vignette.
             if (vignette > 0) {
                 float nx = (x / (float)W - 0.5f) * 2.0f, ny = (y / (float)H - 0.5f) * 2.0f;
@@ -208,7 +208,57 @@ Image applyShader(const Image& src, int style, float timeOfDay, bool lantern) {
     return out;
 }
 
+// ---- Built-in professional looks (HD-2D reference grade) --------------------
+struct NamedPreset { const char* name; ShaderParams p; };
+const NamedPreset kPresets[] = {
+    // Flagship HD-2D look: warm key, gentle filmic contrast, soft bloom + vignette
+    // (inspired by modern HD-2D titles). Faithful colours, just cinematic.
+    {"HD-2D", [] { ShaderParams p; p.exposure = 1.02f; p.contrast = 1.10f;
+        p.saturation = 1.08f; p.temperature = 0.12f; p.gamma = 1.02f; p.vignette = 0.18f;
+        p.bloom = 0.32f; p.bloomThreshold = 0.70f; return p; }()},
+    {"CRT", [] { ShaderParams p; p.contrast = 1.06f; p.saturation = 1.04f;
+        p.temperature = 0.06f; p.vignette = 0.20f; p.bloom = 0.35f; p.bloomThreshold = 0.65f;
+        p.scanline = 0.16f; return p; }()},
+    {"LCD", [] { ShaderParams p; p.contrast = 1.08f; p.saturation = 1.06f;
+        p.temperature = -0.03f; p.vignette = 0.06f; p.lcdGrid = 0.10f; p.sharpen = 0.18f;
+        return p; }()},
+    {"Night", [] { ShaderParams p; p.exposure = 0.86f; p.contrast = 1.06f;
+        p.saturation = 0.98f; p.temperature = -0.16f; p.gamma = 1.05f; p.vignette = 0.28f;
+        p.bloom = 0.26f; p.bloomThreshold = 0.60f; return p; }()},
+    {"Vivid", [] { ShaderParams p; p.exposure = 1.03f; p.contrast = 1.12f;
+        p.saturation = 1.26f; p.vignette = 0.10f; p.bloom = 0.16f; p.sharpen = 0.10f;
+        return p; }()},
+};
+
 }  // namespace
+
+int shaderPresetCount() { return (int)(sizeof(kPresets) / sizeof(kPresets[0])); }
+
+const char* shaderPresetName(int index) {
+    if (index < 0 || index >= shaderPresetCount()) return "";
+    return kPresets[index].name;
+}
+
+ShaderParams shaderPreset(int index) {
+    if (index < 0 || index >= shaderPresetCount()) return ShaderParams{};
+    return kPresets[index].p;
+}
+
+void shaderParamsToArray(const ShaderParams& p, float* o) {
+    o[0] = p.brightness; o[1] = p.exposure; o[2] = p.contrast; o[3] = p.saturation;
+    o[4] = p.temperature; o[5] = p.tint; o[6] = p.gamma; o[7] = p.vignette;
+    o[8] = p.bloom; o[9] = p.bloomThreshold; o[10] = p.scanline; o[11] = p.lcdGrid;
+    o[12] = p.sharpen;
+}
+
+ShaderParams shaderParamsFromArray(const float* in) {
+    ShaderParams p;
+    p.brightness = in[0]; p.exposure = in[1]; p.contrast = in[2]; p.saturation = in[3];
+    p.temperature = in[4]; p.tint = in[5]; p.gamma = in[6]; p.vignette = in[7];
+    p.bloom = in[8]; p.bloomThreshold = in[9]; p.scanline = in[10]; p.lcdGrid = in[11];
+    p.sharpen = in[12];
+    return p;
+}
 
 Image renderEmulatorScreen(const Image& framebuffer, const PresentationOptions& opt) {
     if (framebuffer.pixels.empty()) return framebuffer;
@@ -217,7 +267,7 @@ Image renderEmulatorScreen(const Image& framebuffer, const PresentationOptions& 
     // Layer 1: geometric 2.5D (independent).
     if (opt.enable25D) img = apply25D(img, opt.tilt);
     // Layer 2: shader overlay on top (independent).
-    if (opt.enableShader) img = applyShader(img, opt.shaderStyle, opt.timeOfDay, opt.lantern);
+    if (opt.enableShader) img = applyShader(img, opt.shader, opt.lantern);
     return img;
 }
 

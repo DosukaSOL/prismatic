@@ -47,6 +47,41 @@ AMOLED, Android). First proof‑of‑concept: a DS‑shaped dual‑screen scene.
 > [Known limitations](docs/KNOWN_LIMITATIONS.md). No claim of "complete",
 > "production ready", or "100% compatible" is made anywhere.
 
+## 🆕 v0.3.0 — Shader Studio, a real menu, and a compatibility list
+
+This release turns the presentation layer into something you fully control, and
+gives the app a proper front‑end.
+
+- **Shader Studio (build your own look).** A live, on‑device editor — like the
+  shader/【filter】panels on desktop melonDS — with **13 tweakable parameters**
+  (brightness, exposure, contrast, saturation, temperature, tint, gamma,
+  vignette, bloom + threshold, scanline, LCD grid, sharpen) plus the 2.5D depth
+  tilt and lantern glow. Drag a slider and the game updates instantly.
+- **Save & re‑apply looks.** Craft a look, **name it, save it**, and load it again
+  after rebooting the game. Looks live in `files/shaders/` on the device.
+- **Professional preset pack.** Five hand‑tuned presets — **HD‑2D, CRT, LCD,
+  Night, Vivid** — designed to look like they belong (the HD‑2D preset aims for
+  that warm, softly‑bloomed Octopath feel).
+- **Branded home screen.** The app opens on a real menu — Prismatic logo, brand
+  colours, animated cards: **Open Game · Compatible Games · Shader Studio ·
+  Speed · Quit** — the kind of front‑end you'd expect from Eden / melonDS / Cemu.
+- **Close the game properly.** The pause menu now has **Save & Close** and
+  **Close (no save)**, both returning you to the home screen; **Back on the home
+  screen exits Prismatic**. (Previously there was no way to fully close a game.)
+- **Correct button mapping.** The pad's **A/B/X/Y now drive the DS's A/B/X/Y**
+  directly — what you press is what the game sees.
+- **Compatibility list.** A built‑in **Compatible Games** view (and
+  [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)) lists verified titles, starting
+  with **Pokémon HeartGold & SoulSilver**. Loading a listed game auto‑applies its
+  recommended HD‑2D profile (unless you've loaded your own saved look).
+
+> Honesty note (2.5D): the depth tilt is still an honest **geometric** effect, not
+> a true voxel diorama. A real per‑object diorama needs a game's map/entity data
+> (a decompilation) or the emulator's 3D **depth buffer**; the depth‑buffer path
+> is documented as concrete future work in
+> [Known limitations](docs/KNOWN_LIMITATIONS.md) and is **not** shipped yet.
+> Prismatic still ships **no ROMs** — bring your own dump.
+
 ## 🆕 v0.2.0 — faithful by default, layers you control
 
 The DS path was rebuilt to be **accurate and fast first**, with presentation as

@@ -230,6 +230,11 @@ public:
     // since the last call. Returns the number of frames written. Backends
     // without audio return 0. Safe to call from a dedicated audio thread.
     virtual int readAudio(int16_t* /*out*/, int /*maxFrames*/) { return 0; }
+
+    // Force the current battery/SRAM save to persistent storage now. Called
+    // before closing a game so in-game progress is guaranteed on disk. Backends
+    // that persist automatically (or have no save) may no-op.
+    virtual void flushSave() {}
 };
 
 }  // namespace prismatic

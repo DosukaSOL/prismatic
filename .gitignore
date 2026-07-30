@@ -1,6 +1,7 @@
 # ---- PRISMATIC: private / copyrighted game material (NEVER commit) ----
 local_data/
 local_reports/
+roms/
 *.nds
 *.gba
 *.gbc

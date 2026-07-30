@@ -158,6 +158,16 @@ public:
         if (o) o.write(reinterpret_cast<const char*>(data), (std::streamsize)len);
     }
 
+    // Force the live cartridge SRAM to disk (used by "Save & Close"). melonDS
+    // normally flushes through the sink after in-game writes; this guarantees
+    // the newest bytes are persisted right now.
+    void flushSave() override {
+        if (!nds_) return;
+        const uint8_t* data = nds_->GetNDSSave();
+        uint32_t len = nds_->GetNDSSaveLength();
+        writeSave(data, len);
+    }
+
 private:
     static void saveSinkThunk(const uint8_t* data, uint32_t len, void* ud) {
         if (ud) static_cast<NdsAdapter*>(ud)->writeSave(data, len);
