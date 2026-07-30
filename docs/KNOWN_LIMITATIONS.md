@@ -5,6 +5,28 @@ Honest, evidence-based list of what PRISMATIC does **not** do (yet) or cannot be
 claimed to do. Nothing here is labeled "complete", "production ready", or "100%
 compatible".
 
+## v0.2.0 presentation — what the "2.5D" is and is not
+
+- **The real-ROM "2.5D" is a geometric perspective tilt + tilt-shift, not a true
+  diorama.** It resamples the finished frame onto a receding plane and softens
+  the near/far bands (a tabletop / miniature look). It does **not** rebuild real
+  3D geometry, per-tile depth, sprite slabs, or a shadow map. A genuine
+  Octopath-style voxel diorama requires a game's actual **map/tile/entity data**
+  (i.e. a decompilation such as pret/pokered), which **cannot** be recovered from
+  a flat emulator framebuffer. This is a hard, honest boundary.
+- **Shaders are a stylistic post overlay**, not colour-accurate emulation. Styles
+  (CRT/LCD/Warm/Night/Vivid), the day/night grade, and the lantern are opt-in and
+  do not change gameplay.
+- **2.5D and shaders are independent layers** (either / both / neither). The old
+  fused "smudge" path is not used for real ROMs.
+- **Audio** is decoded from the melonDS SPU at 48 kHz stereo. It has **not** been
+  A/B'd against hardware on a commercial title here (device-blocked).
+- **Saves are the game's own battery save (SRAM)**, written to
+  `Android/data/com.prismatic.app/files/saves/` and auto-loaded on boot.
+  **Save-states (resume at an exact frame) are not implemented** — "continue where
+  you left off" relies on in-game saving plus optional auto-loading of the last
+  ROM.
+
 ## Emulation
 
 - **The DS backend (melonDS) is real and running, but not hardware-proven on a
@@ -19,10 +41,10 @@ compatible".
 - **SoulSilver compatibility is unproven.** The core can now technically load and
   run DS ROMs, but no commercial title has been executed here, so no
   compatibility claim is made. This is **hardware/ROM-blocked**, by design.
-- **JIT is compiled but disabled at runtime by default** (the interpreter runs
-  instead) to avoid Android W^X / executable-memory failures on untested
-  devices. Enabling the A64 JIT is a one-line change once basic play is
-  confirmed.
+- **JIT is user-selectable at runtime** via the pause menu (*Speed: Fast (JIT)*
+  vs *Compatible*). Fast/JIT is the default on Android arm64; switch to
+  Compatible (interpreter) if a game misbehaves. The setting applies on the next
+  ROM load/reset. JIT is not compiled on the desktop host build.
 
 ## Rendering
 

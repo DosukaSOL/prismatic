@@ -10,6 +10,7 @@ add_library(prismatic_core STATIC
   src/profile.cpp
   src/presets.cpp
   src/renderer_software.cpp
+  src/emulator_present.cpp
   src/pipeline.cpp
 )
 

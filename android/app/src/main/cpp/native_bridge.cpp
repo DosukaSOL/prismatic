@@ -21,6 +21,7 @@
 #include "prismatic/presets.hpp"
 #include "prismatic/environment.hpp"
 #include "prismatic/lighting.hpp"
+#include "prismatic/emulator_present.hpp"
 #include "synthetic_backend.hpp"
 #include "nds_adapter.hpp"
 
@@ -36,6 +37,17 @@ std::unique_ptr<PrismaticPipeline> g_pipe;
 bool g_lantern = false;
 bool g_isNds = false;         // true once a real DS ROM is loaded
 InputState g_input;           // single source of truth, applied each frame
+PresentationOptions g_present;// 2.5D / shader toggles for the real-ROM path
+bool g_enableJit = true;      // applied on the next ROM (re)load
+
+// Audio hand-off. The emulation thread (under g_mtx, inside nativeRenderTop)
+// drains the core's SPU into g_audioBuf; the Kotlin AudioTrack thread pulls
+// from it via nativeReadAudio. Only the emulation thread ever touches the core,
+// so there is no cross-thread access to melonDS internals. g_audioMtx guards
+// only the small PCM vector and is never held during a frame step.
+std::mutex g_audioMtx;
+std::vector<int16_t> g_audioBuf;                 // interleaved stereo s16
+constexpr size_t kAudioMaxShorts = 8192 * 2;     // ~170 ms @48k, drop oldest past this
 
 void configure(int presetIndex, float timeOfDay, int weather) {
     const auto names = presetNames();
@@ -153,8 +165,12 @@ Java_com_prismatic_app_NativeBridge_nativeLoadRom(
     if (rom) env->ReleaseStringUTFChars(jrom, rom);
     if (data) env->ReleaseStringUTFChars(jdata, data);
 
+    {
+        std::lock_guard<std::mutex> alock(g_audioMtx);
+        g_audioBuf.clear();     // drop stale audio before replacing the backend
+    }
     std::string err;
-    auto adapter = makeNdsAdapter(romPath, dataDir, &err);
+    auto adapter = makeNdsAdapter(romPath, dataDir, &err, g_enableJit);
     if (!adapter) {
         LOGE("ROM load failed: %s", err.c_str());
         return JNI_FALSE;
@@ -163,7 +179,7 @@ Java_com_prismatic_app_NativeBridge_nativeLoadRom(
     g_isNds = true;
     g_input = InputState{};
     if (!g_pipe) g_pipe = std::make_unique<PrismaticPipeline>();
-    LOGI("ROM loaded: %s", romPath.c_str());
+    LOGI("ROM loaded: %s (jit=%d)", romPath.c_str(), (int)g_enableJit);
     return JNI_TRUE;
 }
 
@@ -171,6 +187,10 @@ Java_com_prismatic_app_NativeBridge_nativeLoadRom(
 JNIEXPORT void JNICALL
 Java_com_prismatic_app_NativeBridge_nativeUnloadRom(JNIEnv*, jobject) {
     std::lock_guard<std::mutex> lock(g_mtx);
+    {
+        std::lock_guard<std::mutex> alock(g_audioMtx);
+        g_audioBuf.clear();
+    }
     g_backend = makeSyntheticBackend();
     g_isNds = false;
     g_input = InputState{};
@@ -184,28 +204,99 @@ Java_com_prismatic_app_NativeBridge_nativeGameTitle(JNIEnv* env, jobject) {
     return env->NewStringUTF(g_backend->identity().title.c_str());
 }
 
-// Advance one frame and return the enhanced TOP screen as [w, h, ARGB...].
+// Advance one frame and return the presented TOP screen as [w, h, ARGB...].
+//
+// Real DS ROMs use the faithful path: the raw core framebuffer, then the
+// independent 2.5D and shader layers (whichever are enabled). This is fast and
+// colour-accurate — no luminance-guessing reconstruction. The synthetic demo
+// backend keeps using the structured enhancement pipeline.
 JNIEXPORT jintArray JNICALL
 Java_com_prismatic_app_NativeBridge_nativeRenderTop(
         JNIEnv* env, jobject, jint presetIndex, jfloat timeOfDay, jint weather) {
     std::lock_guard<std::mutex> lock(g_mtx);
-    if (!g_backend || !g_pipe) return nullptr;
-    configure(presetIndex, timeOfDay, weather);
+    if (!g_backend) return nullptr;
     g_backend->setInput(g_input);
     g_backend->advanceFrame();
+
+    if (g_isNds) {
+        // Drain the frame's audio into the ring for the AudioTrack thread.
+        int16_t tmp[2048];
+        int f;
+        while ((f = g_backend->readAudio(tmp, 1024)) > 0) {
+            std::lock_guard<std::mutex> alock(g_audioMtx);
+            g_audioBuf.insert(g_audioBuf.end(), tmp, tmp + (size_t)f * 2);
+            if (g_audioBuf.size() > kAudioMaxShorts)
+                g_audioBuf.erase(g_audioBuf.begin(),
+                                 g_audioBuf.begin() + (g_audioBuf.size() - kAudioMaxShorts));
+            if (f < 1024) break;
+        }
+        PresentationOptions o = g_present;
+        o.timeOfDay = timeOfDay;
+        o.lantern = g_lantern;
+        Image fb = g_backend->framebuffer(static_cast<int>(ScreenId::Top));
+        return toArgbArray(env, renderEmulatorScreen(fb, o));
+    }
+
+    if (!g_pipe) return nullptr;
+    configure(presetIndex, timeOfDay, weather);
     RenderResult r = g_pipe->renderScreen(*g_backend, static_cast<int>(ScreenId::Top));
     return toArgbArray(env, r.enhanced);
 }
 
-// Render the current BOTTOM screen (touch UI) WITHOUT advancing the frame.
+// Render the current BOTTOM screen WITHOUT advancing the frame.
 JNIEXPORT jintArray JNICALL
 Java_com_prismatic_app_NativeBridge_nativeRenderBottom(
         JNIEnv* env, jobject, jint presetIndex, jfloat timeOfDay, jint weather) {
     std::lock_guard<std::mutex> lock(g_mtx);
-    if (!g_backend || !g_pipe) return nullptr;
+    if (!g_backend) return nullptr;
+
+    if (g_isNds) {
+        PresentationOptions o = g_present;
+        o.timeOfDay = timeOfDay;
+        o.lantern = g_lantern;
+        Image fb = g_backend->framebuffer(static_cast<int>(ScreenId::Bottom));
+        return toArgbArray(env, renderEmulatorScreen(fb, o));
+    }
+
+    if (!g_pipe) return nullptr;
     configure(presetIndex, timeOfDay, weather);
     RenderResult r = g_pipe->renderScreen(*g_backend, static_cast<int>(ScreenId::Bottom));
     return toArgbArray(env, r.enhanced);
+}
+
+// Independent presentation toggles for the real-ROM path. 2.5D (geometric tilt +
+// tilt-shift) and the shader overlay are fully separable: either, both, or
+// neither. `style`: 0=CRT 1=LCD 2=Warm 3=Night 4=Vivid.
+JNIEXPORT void JNICALL
+Java_com_prismatic_app_NativeBridge_nativeSetPresentation(
+        JNIEnv*, jobject, jboolean enable25D, jboolean enableShader, jint style) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    g_present.enable25D = (enable25D == JNI_TRUE);
+    g_present.enableShader = (enableShader == JNI_TRUE);
+    g_present.shaderStyle = static_cast<int>(style);
+}
+
+// Speed mode: JIT on = fast, off = maximum compatibility. Applied on next load.
+JNIEXPORT void JNICALL
+Java_com_prismatic_app_NativeBridge_nativeSetJit(JNIEnv*, jobject, jboolean on) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    g_enableJit = (on == JNI_TRUE);
+}
+
+// Pull decoded stereo PCM (interleaved s16 L,R) into `jbuf`. Returns the number
+// of shorts written (== frames*2). Called from the AudioTrack thread.
+JNIEXPORT jint JNICALL
+Java_com_prismatic_app_NativeBridge_nativeReadAudio(JNIEnv* env, jobject, jshortArray jbuf) {
+    if (!jbuf) return 0;
+    const jsize cap = env->GetArrayLength(jbuf);
+    if (cap <= 0) return 0;
+    std::lock_guard<std::mutex> alock(g_audioMtx);
+    jsize n = static_cast<jsize>(g_audioBuf.size());
+    if (n > cap) n = cap;
+    if (n <= 0) return 0;
+    env->SetShortArrayRegion(jbuf, 0, n, reinterpret_cast<const jshort*>(g_audioBuf.data()));
+    g_audioBuf.erase(g_audioBuf.begin(), g_audioBuf.begin() + n);
+    return n;
 }
 
 JNIEXPORT jint JNICALL

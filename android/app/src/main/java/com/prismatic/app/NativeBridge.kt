@@ -36,6 +36,22 @@ object NativeBridge {
     external fun nativePresetCount(): Int
     external fun nativePresetName(index: Int): String
 
+    /**
+     * Independent presentation layers for a real ROM. 2.5D (geometric tilt +
+     * tilt-shift) and the shader overlay are fully separable — either, both, or
+     * neither. [style]: 0=CRT 1=LCD 2=Warm 3=Night 4=Vivid.
+     */
+    external fun nativeSetPresentation(enable25D: Boolean, enableShader: Boolean, style: Int)
+
+    /** Speed mode: JIT on = fast, off = maximum compatibility. Applied on next load. */
+    external fun nativeSetJit(on: Boolean)
+
+    /**
+     * Pull decoded stereo PCM (interleaved s16 L,R) into [buf]. Returns the
+     * number of shorts written (frames*2). Call from the audio thread.
+     */
+    external fun nativeReadAudio(buf: ShortArray): Int
+
     /** Load a real DS ROM. [dataDir] must be a writable app directory (saves/firmware). */
     external fun nativeLoadRom(romPath: String, dataDir: String): Boolean
 

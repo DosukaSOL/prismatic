@@ -225,6 +225,11 @@ public:
     // Capture. screen index: 0 = single/top, 1 = bottom.
     virtual Image framebuffer(int screen) const = 0;
     virtual StructuredFrame structuredFrame(int screen) const = 0;
+
+    // Pull up to maxFrames stereo audio sample-frames (interleaved L,R) produced
+    // since the last call. Returns the number of frames written. Backends
+    // without audio return 0. Safe to call from a dedicated audio thread.
+    virtual int readAudio(int16_t* /*out*/, int /*maxFrames*/) { return 0; }
 };
 
 }  // namespace prismatic

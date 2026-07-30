@@ -47,6 +47,37 @@ AMOLED, Android). First proof‑of‑concept: a DS‑shaped dual‑screen scene.
 > [Known limitations](docs/KNOWN_LIMITATIONS.md). No claim of "complete",
 > "production ready", or "100% compatible" is made anywhere.
 
+## 🆕 v0.2.0 — faithful by default, layers you control
+
+The DS path was rebuilt to be **accurate and fast first**, with presentation as
+**independent, opt‑in layers** — no more baked‑in "smudge".
+
+- **Faithful rendering by default.** Real ROMs now display the emulator's own
+  framebuffer directly (correct colours, native speed). The old luminance‑guess
+  reconstruction that stretched/smeared DS frames is **no longer on the real‑ROM
+  path**.
+- **2.5D and shaders are separate layers.** Each toggles on its own — you can run
+  **2.5D only**, **shader only**, **both**, or **neither**. They are never fused.
+  - *2.5D* is an honest **geometric perspective tilt + tilt‑shift** (a tabletop /
+    diorama look). It is **not** a true Octopath‑style voxel diorama: that needs a
+    game's actual map/tile/entity data (a decompilation), which cannot be
+    recovered from a flat emulator framebuffer. We do not pretend otherwise.
+  - *Shader* is a tasteful post overlay with 5 styles: **CRT, LCD, Warm, Night,
+    Vivid**, plus a day/night grade and an optional night **lantern**.
+- **Sound.** DS audio is decoded from the core's SPU and played at 48 kHz stereo.
+- **Speed toggle.** *Fast (JIT)* or *Compatible* — pick per game.
+- **On‑device saves + auto‑resume.** Battery saves (SRAM) are written to a visible
+  folder — `Android/data/com.prismatic.app/files/saves/` — and auto‑loaded when a
+  ROM boots. With **Auto‑load last game** on, relaunching the app boots your last
+  ROM so you continue where you left off.
+- **Real emulator UI.** Full‑screen game (both DS screens stacked, or the bottom
+  routed to a second display). Press **Back** (or the pad's **Mode**) for a
+  translucent **pause menu** — there is no always‑on overlay anymore.
+
+> Honesty note: these presentation effects are stylistic overlays applied to the
+> final image. They enhance the look; they do not reconstruct true 3D geometry
+> from a DS framebuffer.
+
 ## ✨ Gallery
 
 All frames below are produced by the deterministic pipeline from the **first‑party

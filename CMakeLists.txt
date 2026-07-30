@@ -12,7 +12,7 @@
 # CMake invocation from the NDK; it is intentionally NOT part of this desktop
 # tree so the host build stays dependency-light and fully testable.
 cmake_minimum_required(VERSION 3.19)
-project(prismatic LANGUAGES CXX VERSION 0.1.0)
+project(prismatic LANGUAGES CXX VERSION 0.2.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

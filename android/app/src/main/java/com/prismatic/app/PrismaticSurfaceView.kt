@@ -29,6 +29,7 @@ class PrismaticSurfaceView @JvmOverloads constructor(
     @Volatile var weather: Int = 0
     @Volatile var bottom: Boolean = false
     @Volatile var inputMask: Int = 0            // DS buttons (top view drives emulation)
+    @Volatile var paused: Boolean = false       // freeze emulation (last frame stays on screen)
 
     private var thread: RenderThread? = null
     private val bgPaint = Paint().apply { color = Color.BLACK }
@@ -61,6 +62,12 @@ class PrismaticSurfaceView @JvmOverloads constructor(
         override fun run() {
             while (running) {
                 val frameStart = System.nanoTime()
+                // While paused, freeze emulation: don't advance the frame. The
+                // last posted buffer stays visible under the pause menu overlay.
+                if (paused) {
+                    try { sleep(32) } catch (_: InterruptedException) {}
+                    continue
+                }
                 val data = if (bottom) {
                     NativeBridge.nativeRenderBottom(presetIndex, timeOfDay, weather)
                 } else {

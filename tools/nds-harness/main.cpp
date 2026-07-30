@@ -16,6 +16,7 @@
 #include <string>
 
 #include "prismatic/pipeline.hpp"
+#include "prismatic/emulator_present.hpp"
 #include "prismatic/png.hpp"
 #include "nds_adapter.hpp"
 
@@ -27,6 +28,7 @@ int main(int argc, char** argv) {
     std::string preset = "HD-2.5D BALANCED";
     int frames = 300;
     fs::path outDir = "local_data/nds_output";
+    bool pattern = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -34,8 +36,38 @@ int main(int argc, char** argv) {
         else if (a == "--preset" && i + 1 < argc) preset = argv[++i];
         else if (a == "--frames" && i + 1 < argc) frames = std::atoi(argv[++i]);
         else if (a == "--out" && i + 1 < argc) outDir = argv[++i];
+        else if (a == "--pattern") pattern = true;
         else if (romPath.empty() && !a.empty() && a[0] != '-') romPath = a;
     }
+
+    // Shader/2.5D preview on a synthetic colour frame (no ROM needed).
+    if (pattern) {
+        std::error_code pec;
+        fs::create_directories(outDir, pec);
+        Image img(256, 192);
+        for (int y = 0; y < 192; ++y)
+            for (int x = 0; x < 256; ++x) {
+                bool ck = ((x >> 4) ^ (y >> 4)) & 1;
+                uint8_t r = (uint8_t)(x);                    // horizontal red ramp
+                uint8_t g = (uint8_t)(y * 4 / 3);            // vertical green ramp
+                uint8_t b = (uint8_t)(ck ? 220 : 60);        // checker blue
+                if (y > 150) { r = 250; g = 240; b = 90; }   // bright band (bloom test)
+                img.at(x, y) = Color{r, g, b, 255};
+            }
+        auto w = [&](const std::string& t, const Image& im) {
+            writePng((outDir / (std::string("pat_") + t + ".png")).string(), im);
+        };
+        w("native", img);
+        for (int st = 0; st < 5; ++st) {
+            PresentationOptions o; o.enableShader = true; o.shaderStyle = st; o.timeOfDay = 13.0f;
+            w("shader" + std::to_string(st), renderEmulatorScreen(img, o));
+        }
+        PresentationOptions o; o.enable25D = true; w("25d", renderEmulatorScreen(img, o));
+        o.enableShader = true; o.shaderStyle = 2; w("both", renderEmulatorScreen(img, o));
+        std::printf("Wrote pattern previews to %s\n", outDir.string().c_str());
+        return 0;
+    }
+
     if (romPath.empty()) {
         if (const char* env = std::getenv("PRISMATIC_NDS_ROM")) romPath = env;
     }
@@ -79,27 +111,36 @@ int main(int argc, char** argv) {
     std::printf("Ran %d frames in %.1f ms (%.2f ms/frame).\n",
                 frames, emuMs, frames ? emuMs / frames : 0.0);
 
-    PrismaticPipeline pipe;
-    pipe.setPresetByName(preset);
-
+    // Independent presentation layers, exactly as on-device: faithful base,
+    // geometric 2.5D, shader overlay, and both together. Written per screen so
+    // the four combinations can be eyeballed.
     fs::create_directories(outDir, ec);
     const char* names[2] = {"top", "bottom"};
+    int shaderStyle = 0;
+    if (preset.find("LCD") != std::string::npos) shaderStyle = 1;
+    else if (preset.find("Warm") != std::string::npos) shaderStyle = 2;
+    else if (preset.find("Night") != std::string::npos) shaderStyle = 3;
+    else if (preset.find("Vivid") != std::string::npos) shaderStyle = 4;
+
+    auto write = [&](const std::string& tag, const Image& img) {
+        writePng((outDir / (std::string("nds_") + tag + ".png")).string(), img);
+    };
     for (int s = 0; s < adapter->screenCount() && s < 2; ++s) {
-        const Image native = adapter->framebuffer(s);
-        writePng((outDir / (std::string("nds_") + names[s] + "_native.png")).string(), native);
+        const Image fb = adapter->framebuffer(s);
+        write(std::string(names[s]) + "_native", fb);
 
+        PresentationOptions o;
+        o.timeOfDay = 20.0f; o.shaderStyle = shaderStyle;
         auto e0 = std::chrono::high_resolution_clock::now();
-        RenderResult r = pipe.renderScreen(*adapter, s);
+        o.enable25D = true;  o.enableShader = false; write(std::string(names[s]) + "_25d",    renderEmulatorScreen(fb, o));
+        o.enable25D = false; o.enableShader = true;  write(std::string(names[s]) + "_shader", renderEmulatorScreen(fb, o));
+        o.enable25D = true;  o.enableShader = true;  Image both = renderEmulatorScreen(fb, o);
         auto e1 = std::chrono::high_resolution_clock::now();
-
-        const std::string outPng =
-            (outDir / (std::string("nds_") + names[s] + "_enhanced.png")).string();
-        writePng(outPng, r.enhanced);
-        std::printf("[%s] enhanced %dx%d in %.2f ms -> %s\n", names[s],
-                    r.enhanced.width, r.enhanced.height,
-                    std::chrono::duration<double, std::milli>(e1 - e0).count(),
-                    outPng.c_str());
+        write(std::string(names[s]) + "_both", both);
+        std::printf("[%s] 2.5D+shader style %d, %dx%d, ~%.2f ms\n", names[s], shaderStyle,
+                    both.width, both.height,
+                    std::chrono::duration<double, std::milli>(e1 - e0).count() / 3.0);
     }
-    std::printf("Wrote native + enhanced PNGs to %s\n", outDir.string().c_str());
+    std::printf("Wrote native / 25d / shader / both PNGs to %s\n", outDir.string().c_str());
     return 0;
 }

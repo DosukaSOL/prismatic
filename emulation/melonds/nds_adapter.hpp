@@ -13,11 +13,15 @@
 namespace prismatic {
 
 // Create a melonDS-backed adapter with `romPath` loaded and direct-booted.
-// `dataDir` is a writable directory for saves / generated firmware. No external
-// BIOS is required (melonDS FreeBIOS + generated firmware are used). Returns
-// nullptr and fills `error` on failure. The .sav file is `<romPath>.sav`.
+// `dataDir` is a writable directory for battery saves + generated firmware; the
+// adapter creates a `saves/` subfolder there and stores `<gamecode>_<hash>.sav`,
+// which is auto-loaded next time the same game is opened. No external BIOS is
+// required (melonDS FreeBIOS + generated firmware). `enableJit` turns on the
+// A64 recompiler (faster); pass false for the safe interpreter. Returns nullptr
+// and fills `error` on failure.
 std::unique_ptr<EmulatorAdapter> makeNdsAdapter(const std::string& romPath,
                                                 const std::string& dataDir,
-                                                std::string* error = nullptr);
+                                                std::string* error = nullptr,
+                                                bool enableJit = true);
 
 }  // namespace prismatic

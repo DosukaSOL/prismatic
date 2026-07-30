@@ -3,7 +3,9 @@
 #include "nds_adapter.hpp"
 
 #include <cstdint>
+#include <cctype>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <optional>
 #include <vector>
@@ -15,6 +17,7 @@
 #include "NDS.h"
 #include "NDSCart.h"
 #include "GPU.h"
+#include "SPU.h"
 #include "ARMJIT.h"
 #include "Platform.h"
 
@@ -64,7 +67,8 @@ public:
         melon::setNdsSaveSink(nullptr, nullptr);
     }
 
-    bool init(const std::string& romPath, const std::string& dataDir, std::string* error);
+    bool init(const std::string& romPath, const std::string& dataDir, std::string* error,
+              bool enableJit);
 
     AdapterInfo info() const override {
         AdapterInfo i;
@@ -128,6 +132,13 @@ public:
         return (screen == (int)ScreenId::Bottom) ? bottom_ : top_;
     }
 
+    // Pull decoded stereo audio from the SPU. Called on the audio thread; the
+    // SPU serialises internally, so no adapter-wide lock is taken here.
+    int readAudio(int16_t* out, int maxFrames) override {
+        if (!nds_ || maxFrames <= 0) return 0;
+        return nds_->SPU.ReadOutput(out, maxFrames);
+    }
+
     // Level1 backends route through the framebuffer path; structuredFrame is
     // provided for completeness (a minimal, correctly-sized empty frame).
     StructuredFrame structuredFrame(int screen) const override {
@@ -163,6 +174,21 @@ private:
             nds_->SetNDSSave(saveBuf_.data(), (uint32_t)saveBuf_.size());
     }
 
+    // <dataDir>/saves/<gamecode>_<sha8>.sav — stable across re-imports of the
+    // same ROM. Falls back to <dataDir>/saves/rom.sav if identity is missing.
+    std::string computeSavePath(const std::string& dataDir) const {
+        namespace fs = std::filesystem;
+        fs::path dir = fs::path(dataDir) / "saves";
+        std::error_code ec;
+        fs::create_directories(dir, ec);
+        std::string code;
+        for (char c : id_.gameCode)
+            if (std::isalnum((unsigned char)c)) code += c;
+        if (code.empty()) code = "rom";
+        std::string sha8 = id_.romSha256.substr(0, 8);
+        return (dir / (code + "_" + sha8 + ".sav")).string();
+    }
+
     void readFramebuffers() {
         if (top_.pixels.empty()) top_ = Image(kDsW, kDsH);
         if (bottom_.pixels.empty()) bottom_ = Image(kDsW, kDsH);
@@ -188,7 +214,8 @@ private:
     std::vector<uint8_t> saveBuf_;
 };
 
-bool NdsAdapter::init(const std::string& romPath, const std::string& dataDir, std::string* error) {
+bool NdsAdapter::init(const std::string& romPath, const std::string& dataDir, std::string* error,
+                      bool enableJit) {
     auto fail = [&](const std::string& m) { if (error) *error = m; return false; };
 
     // Platform layer: where melonDS reads/writes (firmware, temp) and how saves
@@ -223,11 +250,10 @@ bool NdsAdapter::init(const std::string& romPath, const std::string& dataDir, st
     // Build the DS with defaults: FreeBIOS + generated firmware (no external
     // BIOS needed), software renderer (null Renderer auto-creates SoftRenderer).
     melonDS::NDSArgs args;
-    // Ship the interpreter (JIT disabled) for the first release: it is immune to
-    // Android W^X / executable-memory restrictions that the A64 JIT can hit, and
-    // the Thor's Snapdragon 8 Gen 2 runs the DS interpreter at full speed. The
-    // A64 JIT is still compiled in — delete this line to enable it.
-    args.JIT = std::nullopt;
+    // JIT (A64 recompiler) is much faster on the Thor's Snapdragon 8 Gen 2 but
+    // needs executable memory some Android W^X policies deny. Caller chooses;
+    // std::nullopt selects the always-safe interpreter.
+    if (!enableJit) args.JIT = std::nullopt;
     nds_ = std::make_unique<melonDS::NDS>(std::move(args), nullptr);
 
     // Parse + insert the cart (the unique_ptr overload takes ownership).
@@ -235,13 +261,17 @@ bool NdsAdapter::init(const std::string& romPath, const std::string& dataDir, st
     if (!cart) return fail("not a valid NDS ROM (ParseROM failed): " + romPath);
     nds_->SetNDSCart(std::move(cart));
 
-    // Load an existing battery save if present, then boot the game directly.
-    savePath_ = romPath + ".sav";
+    // Battery saves live in a stable, user-visible folder keyed by game code +
+    // a short ROM hash, so re-opening the same game always finds its save and
+    // continues where the player left off (auto-load below).
+    savePath_ = computeSavePath(dataDir);
     loadSaveIfPresent();
 
     nds_->Reset();
     if (nds_->NeedsDirectBoot()) nds_->SetupDirectBoot("prismatic.nds");
     nds_->Start();
+    // 48 kHz stereo out — a rate every Android device supports directly.
+    nds_->SPU.SetOutputSampleRate(48000.0);
     readFramebuffers();
     return true;
 }
@@ -250,9 +280,10 @@ bool NdsAdapter::init(const std::string& romPath, const std::string& dataDir, st
 
 std::unique_ptr<EmulatorAdapter> makeNdsAdapter(const std::string& romPath,
                                                 const std::string& dataDir,
-                                                std::string* error) {
+                                                std::string* error,
+                                                bool enableJit) {
     auto a = std::make_unique<NdsAdapter>();
-    if (!a->init(romPath, dataDir, error)) return nullptr;
+    if (!a->init(romPath, dataDir, error, enableJit)) return nullptr;
     return a;
 }
 
