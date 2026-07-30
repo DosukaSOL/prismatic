@@ -38,7 +38,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The build compiles the native `.so` (`buildCMakeDebug[arm64-v8a]`), the Kotlin
-sources, and packages a launchable APK. The reference build produced a 3.97 MB
+sources, and packages a launchable APK. The reference build produced a 4.08 MB
 APK containing `lib/arm64-v8a/libprismaticnative.so` (a valid AArch64 ELF). See
 [TEST_REPORT.md](TEST_REPORT.md) for the exact size and SHA-256.
 

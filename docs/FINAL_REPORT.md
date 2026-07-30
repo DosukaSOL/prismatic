@@ -177,8 +177,8 @@ Observed software render time (256×192): ~34 ms first frame, ~16–20 ms after.
 ## 11. APK location, checksum & contents
 
 - Path: `android/app/build/outputs/apk/debug/app-debug.apk`
-- Size: **3,971,111 bytes** (3.97 MB)
-- **SHA-256: `798fcb7096e4e363508ca05eb88f3fc51c08cf60acce17dd63d0352841241706`**
+- Size: **4,079,813 bytes** (4.08 MB)
+- **SHA-256: `1ef6fda0fcb0bf7ce826d73592e5a3423af75659ce40092a0a98748ecd5c336c`**
 - Contents: `classes.dex` (2,308,976 B), `lib/arm64-v8a/libprismaticnative.so`
   (1,609,944 B, ELF AArch64), `AndroidManifest.xml`.
 - Badging: package `com.prismatic.app` v0.1.0, launchable `.MainActivity`,

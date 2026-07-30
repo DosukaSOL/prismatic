@@ -64,8 +64,8 @@ enhancement (3× upscale, contact shadows, sprite relief, day/night, grading, ni
 |---|---|
 | `./gradlew :app:assembleDebug` | **Passed-executed** — `BUILD SUCCESSFUL in 44s`, 40 tasks, native `buildCMakeDebug[arm64-v8a]` included. |
 | APK produced | **Passed-executed** — `android/app/build/outputs/apk/debug/app-debug.apk` |
-| APK size | 3,971,111 bytes (3.97 MB) |
-| APK SHA-256 | `798fcb7096e4e363508ca05eb88f3fc51c08cf60acce17dd63d0352841241706` |
+| APK size | 4,079,813 bytes (4.08 MB) |
+| APK SHA-256 | `1ef6fda0fcb0bf7ce826d73592e5a3423af75659ce40092a0a98748ecd5c336c` |
 | Contents | `classes.dex` (2,308,976 B), `lib/arm64-v8a/libprismaticnative.so` (1,609,944 B), `AndroidManifest.xml` |
 | `.so` type | ELF 64-bit LSB, ARM aarch64, stripped — **Passed-executed** (`file`). |
 | Badging | package `com.prismatic.app` v0.1.0, launchable `.MainActivity`, native-code `arm64-v8a`, minSdk 30 / targetSdk 34 / compileSdk 36 — **Passed-executed** (`aapt dump badging`). |

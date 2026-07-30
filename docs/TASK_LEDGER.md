@@ -32,7 +32,7 @@ Living record of work. Newest entries at the bottom of each gate. Status keys:
   compiled by NDK glslc via `scripts/test_rendering.sh`.
 - DONE Android app `android/` (Kotlin dual-display frontend + JNI bridge reusing
   `prismatic_core`, NDK CMake). `./gradlew :app:assembleDebug` → installable
-  `app-debug.apk` (arm64-v8a, 3.97 MB, launchable `com.prismatic.app/.MainActivity`).
+  `app-debug.apk` (arm64-v8a, 4.08 MB, launchable `com.prismatic.app/.MainActivity`).
 - BLOCKED(no device) On-device run on AYN Thor Max — no hardware attached; APK
   built + packaged but not runtime-verified. Dual-display + Vulkan-optimised
   path DESIGNED, not device-verified.
