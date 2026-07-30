@@ -36,6 +36,19 @@ Living record of work. Newest entries at the bottom of each gate. Status keys:
 - BLOCKED(no device) On-device run on AYN Thor Max — no hardware attached; APK
   built + packaged but not runtime-verified. Dual-display + Vulkan-optimised
   path DESIGNED, not device-verified.
-- DEFERRED(no ROM) Real melonDS/mGBA adapter — designed; requires user ROM/BIOS,
-  never bundled. Synthetic backend proves the pipeline meanwhile.
+- DONE melonDS DS backend integrated behind `EmulatorAdapter` (pinned submodule
+  `third_party/melonDS`, custom `melonDS::Platform` layer, `NdsAdapter` feeding
+  real 256×192 BGRA framebuffers into the enhancement pipeline). Builds + links
+  on desktop and Android arm64.
+- DONE Desktop ROM harness `prismatic_nds_harness` boots + runs a first-party
+  test `.nds` (60 frames @ ~2.5 ms/frame interpreter), extracts framebuffers,
+  writes native + enhanced PNGs. Full runtime chain (threading/timing Platform
+  code) exercised.
+- DONE Android APK links melonDS into `libprismaticnative.so` (arm64-v8a); ROM
+  picker (Storage Access Framework), physical gamepad mapping, and touch wired
+  to `NdsAdapter`. Signed **release** APK: 6.3 MB.
+- BLOCKED(no device/ROM) Commercial DS ROM boot on the Thor — maintainer device
+  test with their own ROM; nothing bundled.
+- DEFERRED(no ROM) Real mGBA (GB/GBC/GBA) adapter — designed; requires user
+  ROM/BIOS, never bundled.
 

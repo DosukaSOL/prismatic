@@ -13,6 +13,7 @@
 #include <android/log.h>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <vector>
 
 #include "prismatic/adapter.hpp"
@@ -21,6 +22,7 @@
 #include "prismatic/environment.hpp"
 #include "prismatic/lighting.hpp"
 #include "synthetic_backend.hpp"
+#include "nds_adapter.hpp"
 
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "prismatic", __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "prismatic", __VA_ARGS__)
@@ -32,6 +34,8 @@ std::mutex g_mtx;
 std::unique_ptr<EmulatorAdapter> g_backend;
 std::unique_ptr<PrismaticPipeline> g_pipe;
 bool g_lantern = false;
+bool g_isNds = false;         // true once a real DS ROM is loaded
+InputState g_input;           // single source of truth, applied each frame
 
 void configure(int presetIndex, float timeOfDay, int weather) {
     const auto names = presetNames();
@@ -110,12 +114,74 @@ Java_com_prismatic_app_NativeBridge_nativeSetLantern(JNIEnv*, jobject, jboolean 
 JNIEXPORT void JNICALL
 Java_com_prismatic_app_NativeBridge_nativeSetTouch(JNIEnv*, jobject, jint x, jint y, jboolean down) {
     std::lock_guard<std::mutex> lock(g_mtx);
-    if (!g_backend) return;
-    InputState in;
-    in.touchActive = (down == JNI_TRUE);
-    in.touchX = x;
-    in.touchY = y;
-    g_backend->setInput(in);
+    g_input.touchActive = (down == JNI_TRUE);
+    g_input.touchX = x;
+    g_input.touchY = y;
+}
+
+// Full DS button input (touch is handled separately by nativeSetTouch). `mask`
+// bit layout (shared with Kotlin NativeBridge):
+//   0=A 1=B 2=X 3=Y 4=L 5=R 6=Start 7=Select 8=Up 9=Down 10=Left 11=Right
+JNIEXPORT void JNICALL
+Java_com_prismatic_app_NativeBridge_nativeSetInput(JNIEnv*, jobject, jint mask) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    auto bit = [&](int i) { return (mask & (1 << i)) != 0; };
+    g_input.a = bit(0);
+    g_input.b = bit(1);
+    g_input.x = bit(2);
+    g_input.y = bit(3);
+    g_input.l = bit(4);
+    g_input.r = bit(5);
+    g_input.start = bit(6);
+    g_input.select = bit(7);
+    g_input.up = bit(8);
+    g_input.down = bit(9);
+    g_input.left = bit(10);
+    g_input.right = bit(11);
+}
+
+// Load a real Nintendo DS ROM. `dataDir` is a writable app directory used for
+// battery saves + generated firmware. Returns false on failure (see logcat).
+JNIEXPORT jboolean JNICALL
+Java_com_prismatic_app_NativeBridge_nativeLoadRom(
+        JNIEnv* env, jobject, jstring jrom, jstring jdata) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    const char* rom = env->GetStringUTFChars(jrom, nullptr);
+    const char* data = env->GetStringUTFChars(jdata, nullptr);
+    std::string romPath = rom ? rom : "";
+    std::string dataDir = data ? data : "";
+    if (rom) env->ReleaseStringUTFChars(jrom, rom);
+    if (data) env->ReleaseStringUTFChars(jdata, data);
+
+    std::string err;
+    auto adapter = makeNdsAdapter(romPath, dataDir, &err);
+    if (!adapter) {
+        LOGE("ROM load failed: %s", err.c_str());
+        return JNI_FALSE;
+    }
+    g_backend = std::move(adapter);
+    g_isNds = true;
+    g_input = InputState{};
+    if (!g_pipe) g_pipe = std::make_unique<PrismaticPipeline>();
+    LOGI("ROM loaded: %s", romPath.c_str());
+    return JNI_TRUE;
+}
+
+// Return to the first-party synthetic demo backend (no ROM).
+JNIEXPORT void JNICALL
+Java_com_prismatic_app_NativeBridge_nativeUnloadRom(JNIEnv*, jobject) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    g_backend = makeSyntheticBackend();
+    g_isNds = false;
+    g_input = InputState{};
+}
+
+// Internal title of the loaded game (empty if none / synthetic).
+JNIEXPORT jstring JNICALL
+Java_com_prismatic_app_NativeBridge_nativeGameTitle(JNIEnv* env, jobject) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_backend || !g_isNds) return env->NewStringUTF("");
+    return env->NewStringUTF(g_backend->identity().title.c_str());
 }
 
 // Advance one frame and return the enhanced TOP screen as [w, h, ARGB...].
@@ -125,6 +191,7 @@ Java_com_prismatic_app_NativeBridge_nativeRenderTop(
     std::lock_guard<std::mutex> lock(g_mtx);
     if (!g_backend || !g_pipe) return nullptr;
     configure(presetIndex, timeOfDay, weather);
+    g_backend->setInput(g_input);
     g_backend->advanceFrame();
     RenderResult r = g_pipe->renderScreen(*g_backend, static_cast<int>(ScreenId::Top));
     return toArgbArray(env, r.enhanced);

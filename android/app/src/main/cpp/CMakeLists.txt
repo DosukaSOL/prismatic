@@ -15,9 +15,21 @@ get_filename_component(PRISMATIC_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../.
 add_subdirectory(${PRISMATIC_ROOT}/core                 ${CMAKE_BINARY_DIR}/core_build)
 add_subdirectory(${PRISMATIC_ROOT}/emulation/synthetic  ${CMAKE_BINARY_DIR}/synthetic_build)
 
+# ---- Real Nintendo DS backend (melonDS core) ------------------------------
+# The Thor is arm64, so enable the A64 JIT recompiler for full-speed emulation.
+# Core only: no Qt/SDL frontend, no OpenGL renderer (we use the software
+# renderer + PRISMATIC's own shading), no GDB stub, no vcpkg.
+set(BUILD_QT_SDL OFF CACHE BOOL "" FORCE)
+set(ENABLE_OGLRENDERER OFF CACHE BOOL "" FORCE)
+set(ENABLE_GDBSTUB OFF CACHE BOOL "" FORCE)
+set(USE_VCPKG OFF CACHE BOOL "" FORCE)
+set(ENABLE_JIT ON CACHE BOOL "" FORCE)
+add_subdirectory(${PRISMATIC_ROOT}/third_party/melonDS   ${CMAKE_BINARY_DIR}/melonDS_build EXCLUDE_FROM_ALL)
+add_subdirectory(${PRISMATIC_ROOT}/emulation/melonds     ${CMAKE_BINARY_DIR}/melonds_build)
+
 add_library(prismaticnative SHARED
     native_bridge.cpp)
 
 target_link_libraries(prismaticnative
-    PRIVATE prismatic_synthetic prismatic_core
+    PRIVATE prismatic_melonds prismatic_synthetic prismatic_core
             android log)

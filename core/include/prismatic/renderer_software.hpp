@@ -41,4 +41,10 @@ struct RenderResult {
 RenderResult renderStructured(const StructuredFrame& frame, MaterialCache& cache,
                               const RenderRequest& req);
 
+// Enhance a flat, already-composited framebuffer (real emulator cores that only
+// expose pixels). Re-shades the real image via a luminance-derived pseudo
+// G-buffer; never invents or replaces game art.
+RenderResult renderFramebuffer(const Image& image, MaterialCache& cache,
+                               const RenderRequest& req);
+
 }  // namespace prismatic

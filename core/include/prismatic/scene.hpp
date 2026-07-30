@@ -45,4 +45,11 @@ struct ReconstructedScene {
 ReconstructedScene reconstructScene(const StructuredFrame& frame, MaterialCache& cache,
                                     const ReconstructOptions& opt = {});
 
+// Reconstruct a scene from a flat, already-composited framebuffer (e.g. from a
+// real emulator core that exposes only pixels). Height/normals are derived from
+// luminance and emissive from a bright-pass: the real pixels are re-shaded, no
+// game art is invented or replaced. Used for Level1_Framebuffer backends.
+ReconstructedScene reconstructSceneFromImage(const Image& image,
+                                             const ReconstructOptions& opt = {});
+
 }  // namespace prismatic

@@ -41,6 +41,10 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            // Sign with the debug keystore so the release APK installs on the
+            // Thor via sideload. Release strips native symbols (much smaller
+            // than the debug build). Swap in a real keystore for store upload.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

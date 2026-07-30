@@ -209,4 +209,64 @@ ReconstructedScene reconstructScene(const StructuredFrame& frame, MaterialCache&
     return s;
 }
 
+ReconstructedScene reconstructSceneFromImage(const Image& image, const ReconstructOptions& opt) {
+    const int W = image.width, H = image.height;
+    ReconstructedScene s;
+    s.width = W; s.height = H;
+    s.albedo = image;
+    s.heightMap = FloatBuffer(W, H, 0.0f);
+    s.emissive = FloatBuffer(W, H, 0.0f);
+    s.depth = FloatBuffer(W, H, 1.0f);
+    s.occupancy = FloatBuffer(W, H, 1.0f);      // a real frame fully covers the screen
+    s.roughness = FloatBuffer(W, H, 0.7f);
+    s.normal.assign((size_t)W * H, Vec3{0, 0, 1});
+    s.objectId.assign((size_t)W * H, 0);
+    s.materialId.assign((size_t)W * H, (uint8_t)Material::Unknown);
+    s.layerKind.assign((size_t)W * H, (uint8_t)LK_Background);
+
+    // Height proxy from perceptual luminance; emissive from a soft bright-pass so
+    // in-game light sources (windows, lamps, sky) drive bloom without inventing art.
+    FloatBuffer rawHeight(W, H, 0.0f);
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) {
+            float L = luma(image.at(x, y));
+            rawHeight.at(x, y) = L * opt.heightScale;
+            float e = clampf((L - 0.80f) / 0.20f, 0.0f, 1.0f);
+            s.emissive.data[(size_t)y * W + x] = e * L;
+        }
+
+    // Edge-preserving-ish smoothing of the height proxy (4-neighbour average).
+    FloatBuffer smoothH(W, H, 0.0f);
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) {
+            float sum = rawHeight.at(x, y); int cnt = 1;
+            const int off[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+            for (auto& o : off) {
+                int nx = x + o[0], ny = y + o[1];
+                if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+                sum += rawHeight.at(nx, ny); ++cnt;
+            }
+            smoothH.at(x, y) = sum / cnt;
+        }
+    s.heightMap = smoothH;
+
+    const MaterialParams mp = paramsFor(Material::Unknown);
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x) {
+            size_t i = (size_t)y * W + x;
+            auto hAt = [&](int xx, int yy) {
+                xx = clampi(xx, 0, W - 1); yy = clampi(yy, 0, H - 1);
+                return s.heightMap.at(xx, yy);
+            };
+            float dhx = hAt(x + 1, y) - hAt(x - 1, y);
+            float dhy = hAt(x, y + 1) - hAt(x, y - 1);
+            float ns = mp.normalStrength * opt.normalStrength;
+            Vec3 n{-(dhx * 6.0f) * ns, -(dhy * 6.0f) * ns, 1.0f};
+            s.normal[i] = normalize(n);
+            s.depth.data[i] = 1.0f - 0.0007f * y - 0.25f * s.heightMap.at(x, y);
+        }
+
+    return s;
+}
+
 }  // namespace prismatic

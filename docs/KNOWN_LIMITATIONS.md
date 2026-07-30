@@ -7,13 +7,22 @@ compatible".
 
 ## Emulation
 
-- **No real emulator core is integrated.** melonDS (DS) and mGBA (GB/GBC/GBA)
-  adapters are **designed but not implemented**. The only working backend is the
-  first-party **synthetic** DS fixture. Consequently PRISMATIC cannot yet run any
-  commercial game, including Pokémon SoulSilver.
-- **SoulSilver compatibility is unproven.** No user ROM was (or should be) present
-  in this environment, so no claim about running or enhancing SoulSilver — or any
-  DS title — is made. This is **ROM-blocked**, by design.
+- **The DS backend (melonDS) is real and running, but not hardware-proven on a
+  commercial ROM.** melonDS is integrated end-to-end behind `EmulatorAdapter`:
+  it compiles, links, and **boots + runs frames** on the desktop host and inside
+  the arm64 Android `.so`. This was verified with a **first-party test ROM**
+  (a minimal spin-loop `.nds`), whose true 256×192 framebuffers flow through the
+  enhancement pipeline. Booting a **commercial** game (e.g. Pokémon SoulSilver)
+  has **not** been run — that is a **device test the maintainer performs on the
+  Thor with their own ROM**. No ROM/BIOS is bundled.
+- **mGBA (GB/GBC/GBA) is still designed, not implemented.**
+- **SoulSilver compatibility is unproven.** The core can now technically load and
+  run DS ROMs, but no commercial title has been executed here, so no
+  compatibility claim is made. This is **hardware/ROM-blocked**, by design.
+- **JIT is compiled but disabled at runtime by default** (the interpreter runs
+  instead) to avoid Android W^X / executable-memory failures on untested
+  devices. Enabling the A64 JIT is a one-line change once basic play is
+  confirmed.
 
 ## Rendering
 

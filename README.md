@@ -37,8 +37,12 @@ AMOLED, Android). First proof‑of‑concept: a DS‑shaped dual‑screen scene.
 > [!IMPORTANT]
 > This is an **in‑progress engineering project (pre‑alpha)**, not a finished
 > product. It ships a genuinely working, tested enhancement **core** and an
-> installable Android **APK**, but it does **not yet run any commercial game** —
-> the real emulator adapters are designed, not implemented. See
+> installable Android **APK**. A **real Nintendo DS backend (melonDS)** is now
+> integrated end‑to‑end: it compiles, links, and **boots + runs** on the desktop
+> host and inside the arm64 Android `.so` (verified with a first‑party test ROM).
+> Booting a **commercial** ROM has **not** been verified on hardware yet — that
+> gate is a device test the maintainer will run on the Thor. The GBA (mGBA)
+> adapter is still designed, not implemented. See
 > [What actually works](#-what-actually-works) and
 > [Known limitations](docs/KNOWN_LIMITATIONS.md). No claim of "complete",
 > "production ready", or "100% compatible" is made anywhere.
@@ -68,8 +72,11 @@ contact shadows, grade).
   compared pixel‑exactly to a native ground‑truth compositor (**7/7 tests pass**).
 - **Adapter‑centric.** Emulation is decoupled from enhancement behind a stable
   `EmulatorAdapter` API; synthetic, mGBA and melonDS backends are peers.
-- **No vendored third‑party source** in the tested core — SHA‑256, JSON and PNG
-  are implemented from scratch.
+- **Real DS core.** The melonDS backend feeds true 256×192 framebuffers through
+  the enhancement pipeline; runs the interpreter by default (JIT compiled in).
+- **No vendored third‑party source** in the tested enhancement core — SHA‑256,
+  JSON and PNG are implemented from scratch. melonDS is a pinned **submodule**,
+  built only for the DS backend (`git submodule update --init --recursive`).
 - **10 tunable presets** + a JSON **profile engine** with per‑tile/tileset/map
   material overrides and copyright‑safe export.
 - **Vulkan‑ready.** GLSL shaders compile to SPIR‑V for the on‑device Adreno path.

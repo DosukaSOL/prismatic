@@ -79,18 +79,13 @@ Image upscaleBilinear(const Image& src, int f) {
 }
 }  // namespace
 
-RenderResult renderStructured(const StructuredFrame& frame, MaterialCache& cache,
-                              const RenderRequest& req) {
+static RenderResult renderFromScene(const ReconstructedScene& scene, const Image& nativeImage,
+                                    const RenderRequest& req) {
     const Preset& preset = req.preset;
     RenderResult res;
-    res.nativeImage = compositeNative(frame);
+    res.nativeImage = nativeImage;
     const int W = res.nativeImage.width, H = res.nativeImage.height;
     res.width = W; res.height = H;
-
-    ReconstructOptions ro;
-    ro.heightScale = preset.heightScale;
-    ro.normalStrength = preset.normalStrength;
-    ReconstructedScene scene = reconstructScene(frame, cache, ro);
 
     EnvLighting env = computeEnvLighting(req.environment);
     LitScene lit = shadeScene(scene, env, preset, req.lights);
@@ -183,6 +178,27 @@ RenderResult renderStructured(const StructuredFrame& frame, MaterialCache& cache
             }
     }
     return res;
+}
+
+RenderResult renderStructured(const StructuredFrame& frame, MaterialCache& cache,
+                              const RenderRequest& req) {
+    const Preset& preset = req.preset;
+    ReconstructOptions ro;
+    ro.heightScale = preset.heightScale;
+    ro.normalStrength = preset.normalStrength;
+    Image nativeImage = compositeNative(frame);
+    ReconstructedScene scene = reconstructScene(frame, cache, ro);
+    return renderFromScene(scene, nativeImage, req);
+}
+
+RenderResult renderFramebuffer(const Image& image, MaterialCache& /*cache*/,
+                               const RenderRequest& req) {
+    const Preset& preset = req.preset;
+    ReconstructOptions ro;
+    ro.heightScale = preset.heightScale;
+    ro.normalStrength = preset.normalStrength;
+    ReconstructedScene scene = reconstructSceneFromImage(image, ro);
+    return renderFromScene(scene, image, req);
 }
 
 }  // namespace prismatic

@@ -50,3 +50,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# melonDS out-of-tree build dir
+build-melon/

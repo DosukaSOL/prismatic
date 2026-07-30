@@ -28,6 +28,7 @@ class PrismaticSurfaceView @JvmOverloads constructor(
     @Volatile var timeOfDay: Float = 12.0f
     @Volatile var weather: Int = 0
     @Volatile var bottom: Boolean = false
+    @Volatile var inputMask: Int = 0            // DS buttons (top view drives emulation)
 
     private var thread: RenderThread? = null
     private val bgPaint = Paint().apply { color = Color.BLACK }
@@ -60,10 +61,13 @@ class PrismaticSurfaceView @JvmOverloads constructor(
         override fun run() {
             while (running) {
                 val frameStart = System.nanoTime()
-                val data = if (bottom)
+                val data = if (bottom) {
                     NativeBridge.nativeRenderBottom(presetIndex, timeOfDay, weather)
-                else
+                } else {
+                    // The top view drives emulation: push buttons, then advance a frame.
+                    NativeBridge.nativeSetInput(inputMask)
                     NativeBridge.nativeRenderTop(presetIndex, timeOfDay, weather)
+                }
 
                 if (data != null && data.size > 2) {
                     val w = data[0]

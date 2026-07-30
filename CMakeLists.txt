@@ -34,4 +34,30 @@ add_subdirectory(emulation/synthetic)
 add_subdirectory(tools/headless-runner)
 add_subdirectory(tests)
 
+# ---- Optional: real Nintendo DS backend (melonDS core) --------------------
+# Off by default so the core test build stays dependency-light. When ON, this
+# vendored melonDS core (third_party/melonDS submodule) is compiled and linked
+# behind PRISMATIC's EmulatorAdapter so real DS ROMs boot and get enhanced.
+option(PRISMATIC_ENABLE_MELONDS "Build the melonDS Nintendo DS backend" OFF)
+if(PRISMATIC_ENABLE_MELONDS)
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/third_party/melonDS/src/NDS.h")
+    message(FATAL_ERROR
+      "PRISMATIC_ENABLE_MELONDS is ON but third_party/melonDS is empty. "
+      "Run: git submodule update --init --recursive")
+  endif()
+  # melonDS build knobs: core only, no Qt/SDL frontend, no GL renderer, no GDB
+  # stub, no vcpkg. The A64/x64 JIT is great on the Thor (Android arm64) but the
+  # host Apple-Silicon JIT needs extra entitlements, so default it OFF on APPLE.
+  set(BUILD_QT_SDL OFF CACHE BOOL "" FORCE)
+  set(ENABLE_OGLRENDERER OFF CACHE BOOL "" FORCE)
+  set(ENABLE_GDBSTUB OFF CACHE BOOL "" FORCE)
+  set(USE_VCPKG OFF CACHE BOOL "" FORCE)
+  if(APPLE AND NOT DEFINED ENABLE_JIT)
+    set(ENABLE_JIT OFF CACHE BOOL "" FORCE)
+  endif()
+  add_subdirectory(third_party/melonDS ${CMAKE_BINARY_DIR}/melonDS EXCLUDE_FROM_ALL)
+  add_subdirectory(emulation/melonds)
+  add_subdirectory(tools/nds-harness)
+endif()
+
 message(STATUS "PRISMATIC configured: build type=${CMAKE_BUILD_TYPE}, compiler=${CMAKE_CXX_COMPILER_ID}")

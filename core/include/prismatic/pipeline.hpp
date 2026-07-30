@@ -35,12 +35,16 @@ public:
     MaterialCache& cache() { return cache_; }
 
     RenderResult renderScreen(EmulatorAdapter& adapter, int screen, int upscale = 0) {
-        StructuredFrame frame = adapter.structuredFrame(screen);
         RenderRequest req;
         req.preset = preset_;
         req.environment = env_;
         req.lights = lights_;
         req.upscale = upscale;
+        // Framebuffer-only backends (real cores that expose just pixels) take the
+        // screen-space path; structured backends reconstruct from tiles/sprites.
+        if (adapter.info().compatibility <= CompatibilityLevel::Level1_Framebuffer)
+            return renderFramebuffer(adapter.framebuffer(screen), cache_, req);
+        StructuredFrame frame = adapter.structuredFrame(screen);
         return renderStructured(frame, cache_, req);
     }
 
