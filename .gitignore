@@ -1,0 +1,52 @@
+# ---- PRISMATIC: private / copyrighted game material (NEVER commit) ----
+local_data/
+local_reports/
+*.nds
+*.gba
+*.gbc
+*.gb
+*.sav
+*.dsv
+*.state
+*.bin
+*.bios
+*.firmware
+*.srm
+*.rtc
+
+# ---- Build outputs ----
+build/
+out/
+cmake-build-*/
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.spv
+tools/headless-runner/out/
+tests/**/out/
+
+# ---- Android / Gradle ----
+.gradle/
+app-android/build/
+app-android/.cxx/
+**/build/
+local.properties
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# ---- IDE / OS ----
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ---- Python ----
+__pycache__/
+*.pyc
+.venv/
+venv/
