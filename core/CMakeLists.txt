@@ -11,7 +11,9 @@ add_library(prismatic_core STATIC
   src/presets.cpp
   src/renderer_software.cpp
   src/emulator_present.cpp
+  src/voxel_diorama.cpp
   src/pipeline.cpp
+  src/mod_registry.cpp
 )
 
 target_include_directories(prismatic_core PUBLIC

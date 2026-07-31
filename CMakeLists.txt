@@ -60,4 +60,30 @@ if(PRISMATIC_ENABLE_MELONDS)
   add_subdirectory(tools/nds-harness)
 endif()
 
+# ---- Optional: real Game Boy Color backend (SameBoy core) -----------------
+# Off by default so the core test build stays dependency-light. When ON, the
+# vendored SameBoy core (third_party/SameBoy submodule, MIT — GPL-compatible) is
+# compiled behind PRISMATIC's EmulatorAdapter so real GB/GBC ROMs (e.g. Pokemon
+# Crystal) boot and feed the tile-extruded voxel 2.5D renderer.
+option(PRISMATIC_ENABLE_SAMEBOY "Build the SameBoy Game Boy Color backend" OFF)
+if(PRISMATIC_ENABLE_SAMEBOY)
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/third_party/SameBoy/Core/gb.h")
+    message(FATAL_ERROR
+      "PRISMATIC_ENABLE_SAMEBOY is ON but third_party/SameBoy is empty. "
+      "Run: git submodule update --init --recursive")
+  endif()
+  add_subdirectory(emulation/gbc)
+  add_subdirectory(tools/gbc-harness)
+endif()
+
+# ---- Crystal recomp: data-driven voxel diorama renderer (core-only) --------
+# Renders .pvx scene blobs (baked from the gitignored pokecrystal data) as 2.5D
+# voxel dioramas. Only needs prismatic_core, so it builds in any configuration.
+add_subdirectory(tools/crystal-recomp)
+
+# ---- Mod manager: inspect/toggle the data-driven graphics & data mods -------
+# Discovers mods/<id>/manifest.json (the built-in voxel diorama renderer ships
+# as the reference graphics mod). Core-only, builds in any configuration.
+add_subdirectory(tools/mod-manager)
+
 message(STATUS "PRISMATIC configured: build type=${CMAKE_BUILD_TYPE}, compiler=${CMAKE_CXX_COMPILER_ID}")

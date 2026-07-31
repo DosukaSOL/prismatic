@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "id": "prismatic.voxel-diorama",
+  "name": "Voxel Diorama Renderer",
+  "modVersion": "0.4.0",
+  "author": "PRISMATIC",
+  "license": "GPL-3.0-or-later",
+  "description": "Reference graphics mod: lifts a flat GBC overworld into a tilted 2.5D voxel diorama (gen1recomp / DramaticShape look). Bakes each map cell into a heightfield with shaped archetypes — gable-roofed buildings with overhanging eaves and recessed doors, domed trees and rocks, terraced ledges, rippling water — then grounds everything with contact shadows and finishes with a daytime colour grade, bloom and vignette pass.",
+  "kind": "graphics",
+  "entry": "renderVoxelHeightfield",
+  "provides": [
+    "renderer.overworld.2p5d",
+    "scene.pvx4"
+  ],
+  "dependencies": [],
+  "enabledByDefault": true,
+  "builtin": true
+}

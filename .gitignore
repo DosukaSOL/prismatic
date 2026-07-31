@@ -52,5 +52,9 @@ __pycache__/
 .venv/
 venv/
 
-# melonDS out-of-tree build dir
+# out-of-tree CMake build dirs
 build-melon/
+build-gbc/
+
+# ---- Mod manager runtime state (per-machine enable flags) ----
+mods/mods.state.json

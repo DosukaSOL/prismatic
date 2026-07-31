@@ -38,6 +38,19 @@ Each reference is rated for **reuse**:
 See `EMULATOR_RENDERING_REFERENCES.md`, `SHADER_REFERENCE_CATALOG.md`,
 `MOBILE_VULKAN_RESEARCH.md`.
 
+### 2D → 2.5D voxel diorama
+
+The reverse-engineered render model that turns a flat GBC overworld into a
+tilted voxel diorama (gen1recomp / DramaticShape look) is documented in
+`VOXEL_RENDER_MODEL.md`; the implementation is
+`../../core/src/voxel_diorama.cpp` (`renderVoxelHeightfield`) driven by
+`../../tools/crystal-recomp/render_scene.cpp`.
+
+| Project | URL | License | Reuse | Notes |
+|---|---|---|---|---|
+| gen1recomp | https://github.com/bryanthaboi/gen1recomp | MIT | CONCEPT | LÖVE2D engine; `Tilt.lua`/`Zoom.lua` give a flat perspective only. |
+| DramaticShape voxel mod | https://github.com/DramaticShape/DramaticShapeVoxelMod | CONCEPT | CONCEPT | Render-pipeline mod: builds the tile layer into one static 3D mesh with real depth + shadow map. Source of the genuine 3D *shapes*. |
+
 ## Decisions derived from this research
 
 See `RESEARCH_DECISIONS.md` and `../ARCHITECTURE_DECISIONS.md`.

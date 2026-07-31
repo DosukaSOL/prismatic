@@ -242,6 +242,11 @@ public:
     // before closing a game so in-game progress is guaranteed on disk. Backends
     // that persist automatically (or have no save) may no-op.
     virtual void flushSave() {}
+
+    // Optional full save states (quick save / resume). Return false when the
+    // backend has no save-state support. Path is a filesystem path.
+    virtual bool saveState(const std::string& /*path*/) { return false; }
+    virtual bool loadState(const std::string& /*path*/) { return false; }
 };
 
 }  // namespace prismatic

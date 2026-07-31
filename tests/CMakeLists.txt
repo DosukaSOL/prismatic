@@ -14,6 +14,7 @@ prismatic_test(test_json        unit/test_json.cpp)
 prismatic_test(test_png         unit/test_png.cpp)
 prismatic_test(test_materials   unit/test_materials.cpp)
 prismatic_test(test_profile     unit/test_profile.cpp)
+prismatic_test(test_mod_registry unit/test_mod_registry.cpp)
 prismatic_test(test_pipeline    integration/test_pipeline.cpp)
 
 # Shader compilation test (real GLSL -> SPIR-V via NDK glslc, if available).
