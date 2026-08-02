@@ -4,6 +4,6 @@
 namespace prismatic {
 
 // PRISMATIC core version string (also surfaced in reports).
-const char* coreVersion() { return "0.4.0"; }
+const char* coreVersion() { return "0.5.0"; }
 
 }  // namespace prismatic
