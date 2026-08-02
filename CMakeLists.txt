@@ -87,4 +87,7 @@ add_subdirectory(tools/crystal-recomp)
 # as the reference graphics mod). Core-only, builds in any configuration.
 add_subdirectory(tools/mod-manager)
 
+# ---- Prism CLI: game library, ROM identity, VCDIFF mod profiles (core-only) --
+add_subdirectory(tools/prism-cli)
+
 message(STATUS "PRISMATIC configured: build type=${CMAKE_BUILD_TYPE}, compiler=${CMAKE_CXX_COMPILER_ID}")
