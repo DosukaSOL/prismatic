@@ -393,6 +393,13 @@ class MainActivity : Activity() {
         resetSpeed()
         savePrefs()
         applyPerGameLook()
+        // Apply this game's saved presentation camera (display-only adjust).
+        val cam = getSharedPreferences(PREFS, 0).getString("cam_${g.id}", "") ?: ""
+        val cp = cam.split(",").mapNotNull { it.toFloatOrNull() }
+        if (cp.size == 3 && (cp[0] != 0f || cp[1] != 1f || cp[2] != 0f))
+            NativeBridge.nativeSetCamera(true, cp[0], 0f, cp[1], cp[2], 0f)
+        else
+            NativeBridge.nativeSetCamera(false, 0f, 0f, 1f, 0f, 0f)
         closeGamePage()
         showHome(false); showMenu(false)
         closeStudio(); closeGames()

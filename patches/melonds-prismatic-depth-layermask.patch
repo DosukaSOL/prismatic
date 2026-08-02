@@ -90,11 +90,44 @@ index 548efe10..4dbc0212 100644
      alignas(8) u32 OBJLine[256];
      alignas(8) u8 OBJWindow[256];
  
+diff --git a/src/GPU3D.cpp b/src/GPU3D.cpp
+index 3272a349..eb9bbad5 100644
+--- a/src/GPU3D.cpp
++++ b/src/GPU3D.cpp
+@@ -685,6 +685,11 @@ void GPU3D::UpdateClipMatrix() noexcept
+     ClipMatrixDirty = false;
+ 
+     memcpy(ClipMatrix, ProjMatrix, 16*4);
++    // PRISMATIC: optional presentation-camera adjust, applied in view space
++    // (after the game's modelview, before projection). Never touches game
++    // logic — only how the scene is projected for display.
++    if (ExtCamEnabled)
++        MatrixMult4x4(ClipMatrix, ExtCamMatrix);
+     MatrixMult4x4(ClipMatrix, PosMatrix);
+ }
+ 
 diff --git a/src/GPU3D.h b/src/GPU3D.h
-index 73eff2ff..bd9a203f 100644
+index 73eff2ff..dce6efc8 100644
 --- a/src/GPU3D.h
 +++ b/src/GPU3D.h
-@@ -337,6 +337,11 @@ public:
+@@ -213,6 +213,16 @@ public:
+     s32 ClipMatrix[16] {};
+     bool ClipMatrixDirty = false;
+ 
++    // PRISMATIC: external presentation-camera matrix (20.12 fixed, view space).
++    s32 ExtCamMatrix[16] {};
++    bool ExtCamEnabled = false;
++    void SetExternalCamera(const s32* m)   // nullptr disables
++    {
++        if (m) { for (int i = 0; i < 16; ++i) ExtCamMatrix[i] = m[i]; ExtCamEnabled = true; }
++        else ExtCamEnabled = false;
++        ClipMatrixDirty = true;
++    }
++
+     u32 Viewport[6] {};
+ 
+     s32 ProjMatrixStack[16] {};
+@@ -337,6 +347,11 @@ public:
      // this is used in software renderers
      virtual u32* GetLine(int line) = 0;
  

@@ -19,6 +19,7 @@ add_library(prismatic_core STATIC
   src/vcdiff.cpp
   src/game_library.cpp
   src/mod_packages.cpp
+  src/nitrofs.cpp
 )
 
 target_include_directories(prismatic_core PUBLIC

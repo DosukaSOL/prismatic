@@ -217,6 +217,25 @@ int main(int argc, char** argv) {
             std::string a; uint32_t len = 64; ss >> a >> len;
             hexDump(*emu, (uint32_t)std::strtoul(a.c_str(), nullptr, 16), len);
         }
+        else if (cmd == "poke") {   // poke ADDR HEXBYTES (e.g. poke 022A2044 00680100)
+            std::string a, hex; ss >> a >> hex;
+            std::vector<uint8_t> bytes;
+            for (size_t i = 0; i + 1 < hex.size(); i += 2)
+                bytes.push_back((uint8_t)std::strtoul(hex.substr(i, 2).c_str(), nullptr, 16));
+            uint32_t addr = (uint32_t)std::strtoul(a.c_str(), nullptr, 16);
+            bool ok = !bytes.empty() && emu->poke(addr, bytes.data(), (uint32_t)bytes.size());
+            std::printf("poke %08X %zu bytes: %s\n", addr, bytes.size(), ok ? "ok" : "FAILED");
+        }
+        else if (cmd == "cam") {    // cam PITCH YAW FOVSCALE HEIGHT DOLLY  (all 0/1 = off)
+            PresentationCamera pc;
+            ss >> pc.pitchDeg >> pc.yawDeg >> pc.fovScale >> pc.heightOffset >> pc.dolly;
+            pc.enabled = pc.pitchDeg != 0 || pc.yawDeg != 0 || pc.fovScale != 1.0f ||
+                         pc.heightOffset != 0 || pc.dolly != 0;
+            emu->setPresentationCamera(pc);
+            std::printf("cam %s pitch=%.1f yaw=%.1f fov=%.2f h=%.0f dolly=%.0f\n",
+                        pc.enabled ? "ON" : "off", pc.pitchDeg, pc.yawDeg, pc.fovScale,
+                        pc.heightOffset, pc.dolly);
+        }
         else if (cmd == "dump") {   // full 4MB main RAM to file (offline diffing)
             std::string p; ss >> p;
             std::vector<uint8_t> ram(0x400000);

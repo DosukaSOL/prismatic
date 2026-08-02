@@ -59,6 +59,7 @@ if(PRISMATIC_ENABLE_MELONDS)
   add_subdirectory(emulation/melonds)
   add_subdirectory(tools/nds-harness)
   add_subdirectory(tools/nds-pilot)
+  add_subdirectory(tools/parity-harness)
 endif()
 
 # ---- Optional: real Game Boy Color backend (SameBoy core) -----------------
