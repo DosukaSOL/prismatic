@@ -12,11 +12,13 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
 #include "prismatic/game_library.hpp"
 #include "prismatic/mod_packages.hpp"
+#include "prismatic/nitrofs.hpp"
 #include "prismatic/vcdiff.hpp"
 
 using namespace prismatic;
@@ -108,6 +110,65 @@ int cmdMods(const std::string& dataDir) {
     return 0;
 }
 
+// List the cartridge filesystem, or extract it (optionally unpacking NARCs).
+int cmdExtract(const std::string& rom, const std::string& outDir, bool listOnly,
+               bool unpackNarcs) {
+    std::ifstream f(rom, std::ios::binary | std::ios::ate);
+    if (!f) { std::fprintf(stderr, "error: cannot open %s\n", rom.c_str()); return 1; }
+    std::streamsize sz = f.tellg();
+    f.seekg(0);
+    std::vector<uint8_t> img((size_t)sz);
+    if (!f.read(reinterpret_cast<char*>(img.data()), sz)) {
+        std::fprintf(stderr, "error: read failed\n");
+        return 1;
+    }
+    NitroFsResult fs = parseNitroFs(img);
+    if (!fs.ok) { std::fprintf(stderr, "error: %s\n", fs.error.c_str()); return 1; }
+
+    uint64_t total = 0;
+    int narcs = 0;
+    for (const auto& file : fs.files) total += file.size;
+    if (listOnly) {
+        for (const auto& file : fs.files)
+            std::printf("%5u %9u %s\n", file.id, file.size, file.path.c_str());
+        std::printf("%zu files, %llu bytes\n", fs.files.size(), (unsigned long long)total);
+        return 0;
+    }
+
+    int written = 0, subfiles = 0;
+    for (const auto& file : fs.files) {
+        std::vector<uint8_t> data;
+        if (!readNitroFile(img, file, data)) continue;
+        fs::path dst = fs::path(outDir) / file.path;
+        fs::create_directories(dst.parent_path());
+        std::ofstream o(dst, std::ios::binary | std::ios::trunc);
+        o.write(reinterpret_cast<const char*>(data.data()), (std::streamsize)data.size());
+        ++written;
+        if (unpackNarcs && data.size() >= 4 && std::memcmp(data.data(), "NARC", 4) == 0) {
+            NarcResult nr = parseNarc(data);
+            if (nr.ok) {
+                ++narcs;
+                fs::path ndir = dst;
+                ndir += ".d";
+                fs::create_directories(ndir);
+                for (size_t i = 0; i < nr.entries.size(); ++i) {
+                    std::vector<uint8_t> sub;
+                    if (!readNarcEntry(data, nr, i, sub)) continue;
+                    std::ofstream so(ndir / (std::to_string(i) + ".bin"),
+                                     std::ios::binary | std::ios::trunc);
+                    so.write(reinterpret_cast<const char*>(sub.data()),
+                             (std::streamsize)sub.size());
+                    ++subfiles;
+                }
+            }
+        }
+    }
+    std::printf("extracted %d files (%llu bytes)", written, (unsigned long long)total);
+    if (unpackNarcs) std::printf(", unpacked %d NARCs (%d subfiles)", narcs, subfiles);
+    std::printf(" -> %s\n", outDir.c_str());
+    return 0;
+}
+
 int cmdProfile(const std::string& dataDir, const std::string& installId,
                const std::string& profileId) {
     GameLibrary lib(dataDir);
@@ -156,6 +217,16 @@ int main(int argc, char** argv) {
     if (cmd == "list") return cmdList(dataDir);
     if (cmd == "mods") return cmdMods(dataDir);
     if (cmd == "profile" && args.size() >= 3) return cmdProfile(dataDir, args[1], args[2]);
+    if (cmd == "extract" && args.size() >= 2) {
+        bool list = false, narcs = false;
+        std::string out = "local_data/extract";
+        for (size_t i = 2; i < args.size(); ++i) {
+            if (args[i] == "--list") list = true;
+            else if (args[i] == "--narcs") narcs = true;
+            else if (args[i] == "--out" && i + 1 < args.size()) out = args[++i];
+        }
+        return cmdExtract(args[1], out, list, narcs);
+    }
     if (cmd == "apply" && args.size() >= 4) {
         std::string err;
         if (!vcdiffApplyFile(args[1], args[2], args[3], err)) {

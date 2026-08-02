@@ -509,4 +509,23 @@ Java_com_prismatic_app_NativeBridge_nativeLoadState(JNIEnv* env, jobject, jstrin
     return (g_backend && g_backend->loadState(path)) ? JNI_TRUE : JNI_FALSE;
 }
 
+// Live display-only camera adjustment (view-space; never touches game logic).
+// enabled=false restores the game's original projection exactly.
+JNIEXPORT void JNICALL
+Java_com_prismatic_app_NativeBridge_nativeSetCamera(JNIEnv*, jobject, jboolean enabled,
+                                                    jfloat pitchDeg, jfloat yawDeg,
+                                                    jfloat fovScale, jfloat heightOff,
+                                                    jfloat dolly) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (!g_backend) return;
+    PresentationCamera pc;
+    pc.enabled = enabled;
+    pc.pitchDeg = pitchDeg;
+    pc.yawDeg = yawDeg;
+    pc.fovScale = fovScale;
+    pc.heightOffset = heightOff;
+    pc.dolly = dolly;
+    g_backend->setPresentationCamera(pc);
+}
+
 }  // extern "C"

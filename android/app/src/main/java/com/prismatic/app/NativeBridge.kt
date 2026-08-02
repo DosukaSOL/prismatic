@@ -115,6 +115,9 @@ object NativeBridge {
     /** Full-machine save state to/from a file. */
     external fun nativeSaveState(path: String): Boolean
     external fun nativeLoadState(path: String): Boolean
+    /** Live display-only camera adjust (view space); enabled=false = original. */
+    external fun nativeSetCamera(enabled: Boolean, pitchDeg: Float, yawDeg: Float,
+                                 fovScale: Float, heightOff: Float, dolly: Float)
 
     /** Internal title of the loaded game, or empty when none is loaded. */
     external fun nativeGameTitle(): String

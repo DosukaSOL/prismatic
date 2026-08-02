@@ -251,15 +251,103 @@ class GamePage(
 
     private fun cameraCard(): View {
         val c = card("Camera", Icons.camera(Brand.PRIMARY_LT))
-        c.addView(infoRow("Current behaviour", when (game.activeProfile) {
-            "visual-plus" -> "Visual+ full camera"
-            "conservative" -> "Visual+ conservative camera"
-            else -> "Original game camera"
-        }))
-        c.addView(note("Camera behaviour currently comes from the Visual+ camera variants above " +
-            "(Original / Conservative / Full). Free per-map camera editing arrives with the native " +
-            "HGSS runtime — see Compatibility."))
+        val prefs = ctx.getSharedPreferences("prismatic", 0)
+        val key = "cam_${game.id}"
+        // stored as "pitch,fov,height" ("" = original)
+        fun stored(): FloatArray {
+            val s = prefs.getString(key, "") ?: ""
+            val p = s.split(",").mapNotNull { it.toFloatOrNull() }
+            return if (p.size == 3) floatArrayOf(p[0], p[1], p[2]) else floatArrayOf(0f, 1f, 0f)
+        }
+        fun apply(v: FloatArray, persist: Boolean = true) {
+            val enabled = v[0] != 0f || v[1] != 1f || v[2] != 0f
+            NativeBridge.nativeSetCamera(enabled, v[0], 0f, v[1], v[2], 0f)
+            if (persist) prefs.edit().putString(key, "${v[0]},${v[1]},${v[2]}").apply()
+        }
+
+        val cur = stored()
+        val status = note(if (isRunningThis()) "Adjusts live while playing."
+                          else "Applied when the game starts.")
+
+        // Presets: display-only view adjustments (game logic untouched).
+        data class Preset(val name: String, val pitch: Float, val fov: Float, val h: Float)
+        val presets = listOf(
+            Preset("Original", 0f, 1f, 0f),
+            Preset("Conservative", -8f, 1.10f, 0f),
+            Preset("Cinematic", -18f, 1.25f, 0f),
+            Preset("Wide", 0f, 0.85f, 0f),
+            Preset("Close", -6f, 1.35f, 0f),
+        )
+        val presetRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+        for (p in presets) {
+            val b = Brand.ghostButton(ctx, p.name) {
+                apply(floatArrayOf(p.pitch, p.fov, p.h))
+                status.text = "${p.name} camera active."
+                rebuildSliders(floatArrayOf(p.pitch, p.fov, p.h))
+            }
+            b.textSize = 12f
+            presetRow.addView(b, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { marginEnd = Brand.dp(ctx, 6f) })
+        }
+        c.addView(presetRow)
+
+        // Live sliders (custom).
+        sliderHost = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        c.addView(sliderHost)
+        camApply = { v -> apply(v); status.text = "Custom camera active." }
+        rebuildSliders(cur)
+
+        c.addView(status)
+        c.addView(note("Display-only: the projection is adjusted between the game's own " +
+            "camera and the screen. Collision, scripts, timing and saves are untouched. " +
+            "Visual+ camera variants (Mods) change the game's own camera and stack with this."))
         return c
+    }
+
+    private lateinit var sliderHost: LinearLayout
+    private var camApply: ((FloatArray) -> Unit)? = null
+
+    private fun rebuildSliders(v: FloatArray) {
+        if (!::sliderHost.isInitialized) return
+        sliderHost.removeAllViews()
+        val cur = v.copyOf()
+        data class Spec(val label: String, val idx: Int, val min: Float, val max: Float, val fmt: (Float) -> String)
+        val specs = listOf(
+            Spec("Tilt", 0, -30f, 15f) { f -> "%.0f°".format(f) },
+            Spec("Zoom", 1, 0.7f, 1.6f) { f -> "%.2fx".format(f) },
+            Spec("Height", 2, -60f, 60f) { f -> "%.0f".format(f) },
+        )
+        for (s in specs) {
+            val row = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, Brand.dp(ctx, 4f), 0, 0)
+            }
+            val valueLabel = TextView(ctx).apply {
+                text = s.fmt(cur[s.idx]); setTextColor(Brand.TEXT); textSize = 12f
+                gravity = Gravity.END
+            }
+            row.addView(TextView(ctx).apply {
+                text = s.label; setTextColor(Brand.TEXT_MUTED); textSize = 12f
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.25f))
+            val bar = android.widget.SeekBar(ctx).apply {
+                max = 1000
+                progress = ((cur[s.idx] - s.min) / (s.max - s.min) * 1000).toInt().coerceIn(0, 1000)
+                setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(sb: android.widget.SeekBar, p: Int, user: Boolean) {
+                        if (!user) return
+                        cur[s.idx] = s.min + (s.max - s.min) * p / 1000f
+                        valueLabel.text = s.fmt(cur[s.idx])
+                        camApply?.invoke(cur)   // live update every tick
+                    }
+                    override fun onStartTrackingTouch(sb: android.widget.SeekBar) {}
+                    override fun onStopTrackingTouch(sb: android.widget.SeekBar) {}
+                })
+            }
+            row.addView(bar, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.6f))
+            row.addView(valueLabel, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.15f))
+            sliderHost.addView(row)
+        }
     }
 
     private fun performanceCard(): View {

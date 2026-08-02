@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -178,6 +179,55 @@ public:
         if ((uint64_t)off + len > (uint64_t)nds_->MainRAMMask + 1) return false;
         std::memcpy(out, nds_->MainRAM + off, len);
         return true;
+    }
+
+    bool poke(uint32_t addr, const void* data, uint32_t len) override {
+        if (!nds_ || !data || len == 0) return false;
+        if (addr < 0x02000000u) return false;
+        uint32_t off = (addr - 0x02000000u) & nds_->MainRAMMask;
+        if ((uint64_t)off + len > (uint64_t)nds_->MainRAMMask + 1) return false;
+        std::memcpy(nds_->MainRAM + off, data, len);
+        return true;
+    }
+
+    // Build the view-space adjust matrix (float) and hand it to the 3D unit as
+    // 20.12 fixed. Row-vector convention (v' = v*M): leftmost factor applies
+    // first. Pitch/yaw rotate about a pivot in FRONT of the camera so the
+    // scene tilts in place instead of swinging around the eye.
+    void setPresentationCamera(const PresentationCamera& cam) override {
+        if (!nds_) return;
+        if (!cam.enabled) { nds_->GPU.GPU3D.SetExternalCamera(nullptr); return; }
+        auto deg2rad = [](float d) { return d * 3.14159265f / 180.0f; };
+        float M[16];
+        auto identity = [&](float* m) {
+            for (int i = 0; i < 16; ++i) m[i] = (i % 5 == 0) ? 1.0f : 0.0f;
+        };
+        auto mul = [&](const float* a, const float* b, float* out) {  // out = a*b
+            float t[16];
+            for (int r = 0; r < 4; ++r)
+                for (int c = 0; c < 4; ++c)
+                    t[r * 4 + c] = a[r * 4 + 0] * b[0 * 4 + c] + a[r * 4 + 1] * b[1 * 4 + c] +
+                                   a[r * 4 + 2] * b[2 * 4 + c] + a[r * 4 + 3] * b[3 * 4 + c];
+            std::memcpy(out, t, sizeof(t));
+        };
+        identity(M);
+        float T1[16], R[16], T2[16], S[16], T3[16];
+        // pivot: view space looks down -Z; the scene sits around z = -pivot.
+        identity(T1); T1[14] = cam.pivotDistance;      // to pivot origin
+        identity(T2); T2[14] = -cam.pivotDistance;     // back
+        float cp = std::cos(deg2rad(cam.pitchDeg)), sp = std::sin(deg2rad(cam.pitchDeg));
+        float cy = std::cos(deg2rad(cam.yawDeg)),  sy = std::sin(deg2rad(cam.yawDeg));
+        float Rx[16], Ry[16];
+        identity(Rx); Rx[5] = cp; Rx[6] = sp; Rx[9] = -sp; Rx[10] = cp;
+        identity(Ry); Ry[0] = cy; Ry[2] = -sy; Ry[8] = sy; Ry[10] = cy;
+        mul(Rx, Ry, R);
+        identity(S); S[0] = cam.fovScale; S[5] = cam.fovScale;
+        identity(T3); T3[13] = cam.heightOffset; T3[14] = cam.dolly;
+        // v' = v * T1 * R * T2 * T3 * S
+        mul(T1, R, M); mul(M, T2, M); mul(M, T3, M); mul(M, S, M);
+        int32_t fx[16];
+        for (int i = 0; i < 16; ++i) fx[i] = (int32_t)std::lround(M[i] * 4096.0f);
+        nds_->GPU.GPU3D.SetExternalCamera(fx);
     }
 
     SceneStream sceneStream(int screen) const override {

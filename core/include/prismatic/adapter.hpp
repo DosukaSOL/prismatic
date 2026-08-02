@@ -201,6 +201,20 @@ struct AdapterInfo {
     CompatibilityLevel compatibility = CompatibilityLevel::Level0_Unsupported;
 };
 
+// ---- Presentation camera ---------------------------------------------------
+// A display-only camera adjustment applied in view space between the game's
+// own modelview and projection. It never changes game logic, collision,
+// scripts or coordinates — only how the already-transformed scene is projected.
+struct PresentationCamera {
+    bool enabled = false;
+    float pitchDeg = 0.0f;      // extra tilt around the view X axis
+    float yawDeg = 0.0f;        // extra turn around the view Y axis (use sparingly)
+    float fovScale = 1.0f;      // >1 = zoom in (focal-length zoom, clip-safe)
+    float heightOffset = 0.0f;  // view-space Y shift, world units
+    float dolly = 0.0f;         // view-space Z shift (+ = closer), world units
+    float pivotDistance = 1550.0f;  // rotation pivot in front of the camera
+};
+
 // ---- The adapter interface ------------------------------------------------
 //
 // A backend is both *drivable* (reset/setInput/advanceFrame) and *capturable*
@@ -259,6 +273,15 @@ public:
     // probes (map ID, player position...). Returns false when unsupported or
     // out of range. Must have no emulation side effects.
     virtual bool peek(uint32_t /*addr*/, void* /*out*/, uint32_t /*len*/) const { return false; }
+
+    // Write emulated main RAM. The backbone of runtime-level game integration
+    // (live camera overrides, mod toggles). Returns false when unsupported or
+    // out of range. Use only with per-version verified addresses.
+    virtual bool poke(uint32_t /*addr*/, const void* /*data*/, uint32_t /*len*/) { return false; }
+
+    // Live display-only camera adjustment (see PresentationCamera). Backends
+    // without a 3D pipeline hook ignore it.
+    virtual void setPresentationCamera(const PresentationCamera& /*cam*/) {}
 };
 
 }  // namespace prismatic
