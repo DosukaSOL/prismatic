@@ -1,0 +1,169 @@
+diff --git a/src/GPU.h b/src/GPU.h
+index b0e1faf1..c9b7cfbd 100644
+--- a/src/GPU.h
++++ b/src/GPU.h
+@@ -865,6 +865,18 @@ public:
+     virtual bool NeedsShaderCompile() { return false; }
+     virtual void ShaderCompileStep(int& current, int& count) {}
+ 
++    // PRISMATIC: forward the 3D rasteriser's per-pixel depth scanline (or nullptr
++    // if the 3D renderer keeps no CPU-side depth). Enables depth-based 2.5D.
++    u32* GetDepth3DLine(int line) { return Rend3D ? Rend3D->GetDepthLine(line) : nullptr; }
++
++    // PRISMATIC: per-pixel layer-provenance bytes for one finished 2D scanline
++    // (unit 0 = engine A, 1 = engine B). See Renderer2D::GetLayerMaskLine.
++    u8* GetLayerMaskLine(int unit, int line)
++    {
++        Renderer2D* r = unit ? Rend2D_B.get() : Rend2D_A.get();
++        return r ? r->GetLayerMaskLine(line) : nullptr;
++    }
++
+ protected:
+     melonDS::GPU& GPU;
+ 
+diff --git a/src/GPU2D.h b/src/GPU2D.h
+index 939320fc..b57ffcad 100644
+--- a/src/GPU2D.h
++++ b/src/GPU2D.h
+@@ -131,6 +131,11 @@ public:
+     virtual bool NeedsShaderCompile() { return false; }
+     virtual void ShaderCompileStep(int& current, int& count) {}
+ 
++    // PRISMATIC: per-pixel layer-provenance byte for one finished scanline
++    // (the winning pixel's compositor flag: 0x01<<bg = BG layer, 0x10/0x80 =
++    // sprite, 0x20 = backdrop, 0x40 = 3D layer). nullptr if not tracked.
++    virtual u8* GetLayerMaskLine(int line) { return nullptr; }
++
+ protected:
+     melonDS::GPU& GPU;
+     melonDS::GPU2D& GPU2D;
+diff --git a/src/GPU2D_Soft.cpp b/src/GPU2D_Soft.cpp
+index 5adc5450..94f61bbc 100644
+--- a/src/GPU2D_Soft.cpp
++++ b/src/GPU2D_Soft.cpp
+@@ -35,6 +35,7 @@ SoftRenderer2D::~SoftRenderer2D()
+ void SoftRenderer2D::Reset()
+ {
+     memset(BGOBJLine, 0, sizeof(BGOBJLine));
++    memset(LayerMask, 0, sizeof(LayerMask));   // PRISMATIC
+     memset(WindowMask, 0, sizeof(WindowMask));
+     memset(OBJLine, 0, sizeof(OBJLine));
+     memset(OBJWindow, 0, sizeof(OBJWindow));
+@@ -348,12 +349,14 @@ void SoftRenderer2D::DrawScanline_BGOBJ(u32 line, u32* dst)
+     // color special effects
+     // can likely be optimized
+ 
++    u8* mask = &LayerMask[line * 256];   // PRISMATIC: record winning layer
+     for (int i = 0; i < 256; i++)
+     {
+         u32 val1 = BGOBJLine[i];
+         u32 val2 = BGOBJLine[256+i];
+ 
+         dst[i] = ColorComposite(i, val1, val2);
++        mask[i] = (u8)(val1 >> 24);
+     }
+ }
+ 
+diff --git a/src/GPU2D_Soft.h b/src/GPU2D_Soft.h
+index 548efe10..4dbc0212 100644
+--- a/src/GPU2D_Soft.h
++++ b/src/GPU2D_Soft.h
+@@ -35,6 +35,12 @@ public:
+     void DrawScanline(u32 line) override;
+     void DrawSprites(u32 line) override;
+     void VBlank() override {}
++
++    // PRISMATIC: winning-pixel compositor flags for a completed scanline.
++    u8* GetLayerMaskLine(int line) override
++    {
++        return (line >= 0 && line < 192) ? &LayerMask[line * 256] : nullptr;
++    }
+     void VBlankEnd() override {};
+ 
+ private:
+@@ -55,6 +61,8 @@ private:
+ 
+     alignas(8) u8 WindowMask[256];
+ 
++    alignas(8) u8 LayerMask[192*256];   // PRISMATIC: per-frame provenance bytes
++
+     alignas(8) u32 OBJLine[256];
+     alignas(8) u8 OBJWindow[256];
+ 
+diff --git a/src/GPU3D.h b/src/GPU3D.h
+index 73eff2ff..bd9a203f 100644
+--- a/src/GPU3D.h
++++ b/src/GPU3D.h
+@@ -337,6 +337,11 @@ public:
+     // this is used in software renderers
+     virtual u32* GetLine(int line) = 0;
+ 
++    // PRISMATIC: return one scanline of the per-pixel 24-bit depth buffer, or
++    // nullptr if this renderer keeps no CPU-side depth (e.g. GL renderers). Used
++    // for genuine depth-based 2.5D presentation. Read after a frame completes.
++    virtual u32* GetDepthLine(int line) { return nullptr; }
++
+     virtual bool NeedsShaderCompile() { return false; }
+     virtual void ShaderCompileStep(int& current, int& count) {}
+ 
+diff --git a/src/GPU3D_Soft.cpp b/src/GPU3D_Soft.cpp
+index e6202700..80145784 100644
+--- a/src/GPU3D_Soft.cpp
++++ b/src/GPU3D_Soft.cpp
+@@ -1849,4 +1849,34 @@ u32* SoftRenderer3D::GetLine(int line)
+     return ScrolledLine;
+ }
+ 
++// PRISMATIC: like GetLine, but returns the 24-bit depth buffer scanline. Meant
++// to be read after a frame finishes (no scanline semaphore wait). Applies the
++// same X-scroll so depth aligns pixel-for-pixel with the colour scanline.
++u32* SoftRenderer3D::GetDepthLine(int line)
++{
++    u32* rawline = &DepthBuffer[(line * ScanlineWidth) + FirstPixelOffset];
++    u16 xpos = GPU3D.RenderXPos;
++    if (xpos == 0)
++        return rawline;
++
++    if (xpos & 0x100)
++    {
++        int i = 0, j = xpos;
++        for (; j < 512; i++, j++)
++            ScrolledDepth[i] = 0;
++        for (j = 0; i < 256; i++, j++)
++            ScrolledDepth[i] = rawline[j];
++    }
++    else
++    {
++        int i = 0, j = xpos;
++        for (; j < 256; i++, j++)
++            ScrolledDepth[i] = rawline[j];
++        for (; i < 256; i++)
++            ScrolledDepth[i] = 0;
++    }
++
++    return ScrolledDepth;
++}
++
+ }
+diff --git a/src/GPU3D_Soft.h b/src/GPU3D_Soft.h
+index f6034f26..d85e1152 100644
+--- a/src/GPU3D_Soft.h
++++ b/src/GPU3D_Soft.h
+@@ -44,6 +44,9 @@ public:
+ 
+     u32* GetLine(int line) override;
+ 
++    // PRISMATIC: per-pixel 24-bit depth scanline (X-scroll aligned like GetLine).
++    u32* GetDepthLine(int line) override;
++
+     void SetupRenderThread();
+     void EnableRenderThread();
+     void StopRenderThread();
+@@ -493,6 +496,7 @@ private:
+     bool FrameIdentical;
+ 
+     u32 ScrolledLine[256];
++    u32 ScrolledDepth[256];   // PRISMATIC: X-scroll-aligned depth scanline
+ 
+     // threading
+ 

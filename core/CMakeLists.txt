@@ -14,6 +14,8 @@ add_library(prismatic_core STATIC
   src/voxel_diorama.cpp
   src/pipeline.cpp
   src/mod_registry.cpp
+  src/game_profile.cpp
+  src/game_lighting.cpp
 )
 
 target_include_directories(prismatic_core PUBLIC

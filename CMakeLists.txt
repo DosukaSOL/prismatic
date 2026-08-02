@@ -58,6 +58,7 @@ if(PRISMATIC_ENABLE_MELONDS)
   add_subdirectory(third_party/melonDS ${CMAKE_BINARY_DIR}/melonDS EXCLUDE_FROM_ALL)
   add_subdirectory(emulation/melonds)
   add_subdirectory(tools/nds-harness)
+  add_subdirectory(tools/nds-pilot)
 endif()
 
 # ---- Optional: real Game Boy Color backend (SameBoy core) -----------------
