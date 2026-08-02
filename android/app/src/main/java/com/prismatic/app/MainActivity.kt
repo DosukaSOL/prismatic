@@ -277,6 +277,13 @@ class MainActivity : Activity() {
         if (!show) enterImmersive()
     }
 
+    /** Lower physical screen: DS touch UI only during live gameplay, otherwise
+     *  the official Prismatic logo (home + management screens). */
+    private fun updateLowerScreenMode() {
+        val playing = gameLoaded && !homeVisible && gamesOverlay == null && remapOverlay == null
+        presentation?.setGameMode(playing)
+    }
+
     // ======================================================================
     //  Pause menu (in-game)
     // ======================================================================
@@ -337,6 +344,7 @@ class MainActivity : Activity() {
         section("Close")
         menuButton("Save & Close") { closeGame(save = true) }
         menuButton("Close (no save)") { closeGame(save = false) }
+        menuButton("Exit Prismatic") { exitPrismatic() }
 
         val hint = TextView(this).apply {
             text = "Saves → Android/data/com.prismatic.app/files/saves"
@@ -880,6 +888,7 @@ class MainActivity : Activity() {
         val paused = homeVisible || menuVisible || (gamesOverlay != null) || (remapOverlay != null)
         topView.paused = paused
         bottomInline.paused = paused
+        updateLowerScreenMode()
     }
 
     private fun presetIndexByName(name: String): Int {
@@ -925,6 +934,17 @@ class MainActivity : Activity() {
         resetSpeed()
         showMenu(false)
         showHome(true)
+    }
+
+    /** Clean, complete exit: flush save, stop audio/threads, drop the lower-
+     *  screen window, then remove this task from Recents entirely. */
+    private fun exitPrismatic() {
+        if (gameLoaded) NativeBridge.nativeFlushSave()
+        audio.stop()
+        presentation?.dismiss()
+        presentation = null
+        savePrefs()
+        finishAndRemoveTask()
     }
 
     private fun resetGame() {
@@ -1226,7 +1246,7 @@ class MainActivity : Activity() {
                 remapOverlay != null -> closeRemap()
                 studioOverlay != null -> closeStudio()
                 gamesOverlay != null -> closeGames()
-                homeVisible -> finishAffinity()          // Back on home exits Prismatic
+                homeVisible -> exitPrismatic()           // Back on home exits + removes task
                 gameLoaded -> showMenu(!menuVisible)
                 else -> showHome(true)
             }
@@ -1588,6 +1608,7 @@ class MainActivity : Activity() {
         if (secondary != null) {
             bottomInline.visibility = View.GONE
             presentation = SecondaryPresentation(this, secondary, shared).also { it.show() }
+            updateLowerScreenMode()
         } else {
             bottomInline.visibility = View.VISIBLE
         }
@@ -1600,6 +1621,29 @@ class MainActivity : Activity() {
         presentation?.dismiss()
         presentation = null
         super.onPause()
+    }
+
+    // onStop is the last callback guaranteed before the system may kill the
+    // process (e.g. the user swipes Prismatic away in Recents) — battery saves
+    // MUST be on disk by the time it returns.
+    override fun onStop() {
+        if (gameLoaded) NativeBridge.nativeFlushSave()
+        savePrefs()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        // Belt-and-braces teardown so no window token, audio track or render
+        // thread outlives the task (root cause of the stuck Recents card).
+        audio.stop()
+        presentation?.dismiss()
+        presentation = null
+        if (gameLoaded) {
+            NativeBridge.nativeFlushSave()
+            NativeBridge.nativeUnloadRom()
+            gameLoaded = false
+        }
+        super.onDestroy()
     }
 
     companion object {

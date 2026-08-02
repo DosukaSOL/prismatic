@@ -3,18 +3,17 @@
 
 <img src="assets/prismatic-logo.png" alt="Prismatic" width="760">
 
-### HD‑2.5D enhancement platform & emulator frontend for pixel handhelds
+### A game-aware launcher, emulator and mod platform for classic handhelds
 
-Relight and reimagine **Game Boy · Game Boy Color · Game Boy Advance · Nintendo DS**
-games in a modern "HD‑2D" style — using **only the game's own pixels**, never
-invented or fabricated art.
+Import your own **Game Boy · Game Boy Color · Game Boy Advance · Nintendo DS**
+games, verify them, mod them safely and play them — clean ROMs are never
+modified, and no game content is ever bundled or invented.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-7C3AED.svg)](LICENSE)
-[![Engine: Foldscape](https://img.shields.io/badge/engine-Foldscape-8B5CF6.svg)](https://github.com/DosukaSOL/Foldscape)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C.svg)](core)
 [![Kotlin](https://img.shields.io/badge/Kotlin-Android-A97BFF.svg)](android)
 [![Vulkan](https://img.shields.io/badge/Vulkan-SPIR--V-AC162C.svg)](shaders)
-[![Tests](https://img.shields.io/badge/tests-7%2F7%20passing-brightgreen.svg)](docs/TEST_REPORT.md)
+[![Tests](https://img.shields.io/badge/tests-9%2F9%20passing-brightgreen.svg)](docs/TEST_REPORT.md)
 [![Status](https://img.shields.io/badge/status-pre--alpha-orange.svg)](docs/KNOWN_LIMITATIONS.md)
 
 [**Getting started**](#-quick-start-desktop-core) ·
@@ -26,15 +25,20 @@ invented or fabricated art.
 
 ---
 
-**PRISMATIC** captures a game's own tiles, sprites and palettes at runtime,
-reconstructs a lightweight 2.5D scene from them, and relights and regrades it into
-a modern, cinematic presentation. Nothing is upscaled by an AI model and no
-artwork is ever fabricated or replaced — every enhanced pixel derives from the
-user's own ROM (or, for development, from a first‑party synthetic backend).
+**PRISMATIC** is a game-focused platform for user-owned classic games: a clean
+library and launcher, per-game management pages, hash-verified ROM import,
+private mod installations (gen1recomp-style: clean ROM + selected mods → a
+generated private build, launched automatically), per-game saves and save
+states, camera and performance settings, and an accurate emulator underneath
+(melonDS-backed for DS). First supported game family: **Pokémon HeartGold /
+SoulSilver**, including the [Visual+ mod](https://github.com/DosukaSOL/pokemon-hgss-visual-mod)
+as a one-tap install. Nothing is upscaled by an AI model and no artwork is ever
+fabricated — every byte the player sees derives from their own ROM.
 
-The 2.5D voxel‑diorama renderer is **[Foldscape](https://github.com/DosukaSOL/Foldscape)** —
-Prismatic is its reference implementation and ships it as the built‑in
-`prismatic.voxel-diorama` graphics mod.
+Game transformation/reconstruction experiments (2D→2.5D conversion) live in the
+separate **[Foldscape](https://github.com/DosukaSOL/Foldscape)** project;
+Prismatic can load Foldscape packages but does not implement them. A game-aware
+shader/lighting engine is in development on a separate branch.
 
 First hardware target: **AYN Thor Max** (Snapdragon 8 Gen 2, Adreno 740, dual
 AMOLED, Android). First proof‑of‑concept: a DS‑shaped dual‑screen scene.
