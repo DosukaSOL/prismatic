@@ -11,6 +11,7 @@
 // are only ever sourced from the user's own ROM via a real emulator adapter.
 #include <jni.h>
 #include <android/log.h>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -22,6 +23,9 @@
 #include "prismatic/environment.hpp"
 #include "prismatic/lighting.hpp"
 #include "prismatic/emulator_present.hpp"
+#include "prismatic/game_library.hpp"
+#include "prismatic/vcdiff.hpp"
+#include "prismatic/hash.hpp"
 #include "synthetic_backend.hpp"
 #include "nds_adapter.hpp"
 
@@ -181,6 +185,37 @@ Java_com_prismatic_app_NativeBridge_nativeLoadRom(
     g_input = InputState{};
     if (!g_pipe) g_pipe = std::make_unique<PrismaticPipeline>();
     LOGI("ROM loaded: %s (jit=%d)", romPath.c_str(), (int)g_enableJit);
+    return JNI_TRUE;
+}
+
+// Platform variant: pins the battery save to an exact file so every mod build
+// of one installed game shares one save.
+JNIEXPORT jboolean JNICALL
+Java_com_prismatic_app_NativeBridge_nativeLoadRomWithSave(
+        JNIEnv* env, jobject, jstring jrom, jstring jdata, jstring jsave) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    auto take = [&](jstring s) {
+        const char* c = env->GetStringUTFChars(s, nullptr);
+        std::string v = c ? c : "";
+        env->ReleaseStringUTFChars(s, c);
+        return v;
+    };
+    std::string romPath = take(jrom), dataDir = take(jdata), savePath = take(jsave);
+    {
+        std::lock_guard<std::mutex> alock(g_audioMtx);
+        g_audioBuf.clear();
+    }
+    std::string err;
+    auto adapter = makeNdsAdapter(romPath, dataDir, &err, g_enableJit, savePath);
+    if (!adapter) {
+        LOGE("ROM load failed: %s", err.c_str());
+        return JNI_FALSE;
+    }
+    g_backend = std::move(adapter);
+    g_isNds = true;
+    g_input = InputState{};
+    if (!g_pipe) g_pipe = std::make_unique<PrismaticPipeline>();
+    LOGI("ROM loaded: %s (save=%s)", romPath.c_str(), savePath.c_str());
     return JNI_TRUE;
 }
 
@@ -384,6 +419,94 @@ Java_com_prismatic_app_NativeBridge_nativePresetName(JNIEnv* env, jobject, jint 
     if (index < 0 || index >= static_cast<int>(names.size()))
         return env->NewStringUTF("");
     return env->NewStringUTF(names[index].c_str());
+}
+
+// ---- game platform (library / ROM identity / mod builds) -------------------
+
+// Identify a ROM file: header + SHA-256 + HGSS classification. Returns a JSON
+// object string, or a JSON object with "error" on failure. No emulator state
+// is touched (safe while a game is running).
+JNIEXPORT jstring JNICALL
+Java_com_prismatic_app_NativeBridge_nativeIdentifyRom(JNIEnv* env, jobject, jstring jpath) {
+    const char* cpath = env->GetStringUTFChars(jpath, nullptr);
+    std::string path = cpath ? cpath : "";
+    env->ReleaseStringUTFChars(jpath, cpath);
+
+    RomIdentity id;
+    std::string err;
+    JsonValue j = JsonValue::makeObject();
+    if (!identifyRom(path, id, err)) {
+        j.set("error", err);
+        return env->NewStringUTF(j.dump(0).c_str());
+    }
+    classifyRom(id, builtinHgssDatabase());
+    j.set("sha256", id.sha256);
+    j.set("title", id.title);
+    j.set("gameCode", id.gameCode);
+    j.set("revision", (int)id.revision);
+    j.set("language", id.language);
+    j.set("region", id.region);
+    j.set("sizeBytes", (double)id.sizeBytes);
+    j.set("trimmed", id.trimmed);
+    j.set("verdict", romVerdictName(id.verdict));
+    j.set("family", id.family);
+    j.set("edition", id.edition);
+    j.set("displayName", id.displayName);
+    return env->NewStringUTF(j.dump(0).c_str());
+}
+
+// Apply a VCDIFF patch: source + patch -> out. Returns "" on success or an
+// error message. Runs on the caller's (background) thread.
+JNIEXPORT jstring JNICALL
+Java_com_prismatic_app_NativeBridge_nativeApplyPatch(JNIEnv* env, jobject,
+                                                     jstring jsrc, jstring jpatch, jstring jout) {
+    auto take = [&](jstring s) {
+        const char* c = env->GetStringUTFChars(s, nullptr);
+        std::string v = c ? c : "";
+        env->ReleaseStringUTFChars(s, c);
+        return v;
+    };
+    std::string err;
+    if (!vcdiffApplyFile(take(jsrc), take(jpatch), take(jout), err))
+        return env->NewStringUTF(err.c_str());
+    return env->NewStringUTF("");
+}
+
+// SHA-256 of an arbitrary file (streamed). Empty string on I/O failure.
+JNIEXPORT jstring JNICALL
+Java_com_prismatic_app_NativeBridge_nativeFileSha256(JNIEnv* env, jobject, jstring jpath) {
+    const char* cpath = env->GetStringUTFChars(jpath, nullptr);
+    std::string path = cpath ? cpath : "";
+    env->ReleaseStringUTFChars(jpath, cpath);
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return env->NewStringUTF("");
+    Sha256 h;
+    std::vector<uint8_t> buf(1 << 20);
+    while (f) {
+        f.read(reinterpret_cast<char*>(buf.data()), (std::streamsize)buf.size());
+        std::streamsize got = f.gcount();
+        if (got > 0) h.update(buf.data(), (size_t)got);
+    }
+    return env->NewStringUTF(h.hexDigest().c_str());
+}
+
+// Full-machine save states (melonDS serializer via the adapter seam).
+JNIEXPORT jboolean JNICALL
+Java_com_prismatic_app_NativeBridge_nativeSaveState(JNIEnv* env, jobject, jstring jpath) {
+    const char* c = env->GetStringUTFChars(jpath, nullptr);
+    std::string path = c ? c : "";
+    env->ReleaseStringUTFChars(jpath, c);
+    std::lock_guard<std::mutex> lock(g_mtx);
+    return (g_backend && g_backend->saveState(path)) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_prismatic_app_NativeBridge_nativeLoadState(JNIEnv* env, jobject, jstring jpath) {
+    const char* c = env->GetStringUTFChars(jpath, nullptr);
+    std::string path = c ? c : "";
+    env->ReleaseStringUTFChars(jpath, c);
+    std::lock_guard<std::mutex> lock(g_mtx);
+    return (g_backend && g_backend->loadState(path)) ? JNI_TRUE : JNI_FALSE;
 }
 
 }  // extern "C"

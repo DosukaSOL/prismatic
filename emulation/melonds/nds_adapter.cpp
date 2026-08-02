@@ -71,7 +71,7 @@ public:
     }
 
     bool init(const std::string& romPath, const std::string& dataDir, std::string* error,
-              bool enableJit);
+              bool enableJit, const std::string& savePathOverride = "");
 
     AdapterInfo info() const override {
         AdapterInfo i;
@@ -387,7 +387,7 @@ private:
 };
 
 bool NdsAdapter::init(const std::string& romPath, const std::string& dataDir, std::string* error,
-                      bool enableJit) {
+                      bool enableJit, const std::string& savePathOverride) {
     auto fail = [&](const std::string& m) { if (error) *error = m; return false; };
 
     // Platform layer: where melonDS reads/writes (firmware, temp) and how saves
@@ -435,8 +435,10 @@ bool NdsAdapter::init(const std::string& romPath, const std::string& dataDir, st
 
     // Battery saves live in a stable, user-visible folder keyed by game code +
     // a short ROM hash, so re-opening the same game always finds its save and
-    // continues where the player left off (auto-load below).
-    savePath_ = computeSavePath(dataDir);
+    // continues where the player left off (auto-load below). The platform
+    // overrides this with one pinned file per install, so switching mod builds
+    // (whose hashes differ) never forks the player's save.
+    savePath_ = savePathOverride.empty() ? computeSavePath(dataDir) : savePathOverride;
     loadSaveIfPresent();
 
     nds_->Reset();
@@ -453,9 +455,10 @@ bool NdsAdapter::init(const std::string& romPath, const std::string& dataDir, st
 std::unique_ptr<EmulatorAdapter> makeNdsAdapter(const std::string& romPath,
                                                 const std::string& dataDir,
                                                 std::string* error,
-                                                bool enableJit) {
+                                                bool enableJit,
+                                                const std::string& savePathOverride) {
     auto a = std::make_unique<NdsAdapter>();
-    if (!a->init(romPath, dataDir, error, enableJit)) return nullptr;
+    if (!a->init(romPath, dataDir, error, enableJit, savePathOverride)) return nullptr;
     return a;
 }
 

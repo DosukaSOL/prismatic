@@ -2,6 +2,10 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Mod packages are fetched from their canonical GitHub releases and
+         hash-verified before use. Prismatic never downloads ROMs. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
