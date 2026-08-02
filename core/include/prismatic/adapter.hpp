@@ -15,6 +15,7 @@
 #include <vector>
 #include <array>
 #include "prismatic/types.hpp"
+#include "prismatic/scene_stream.hpp"
 
 namespace prismatic {
 
@@ -247,6 +248,17 @@ public:
     // backend has no save-state support. Path is a filesystem path.
     virtual bool saveState(const std::string& /*path*/) { return false; }
     virtual bool loadState(const std::string& /*path*/) { return false; }
+
+    // Structured per-frame capture for the game-aware shader engine (layer
+    // provenance, real 3D depth, camera matrices, emulated RTC). Fields the
+    // backend cannot genuinely capture stay null/invalid. Pointers inside are
+    // valid until the next advanceFrame().
+    virtual SceneStream sceneStream(int /*screen*/) const { return SceneStream{}; }
+
+    // Read emulated memory (bus address space) for data-driven game-state
+    // probes (map ID, player position...). Returns false when unsupported or
+    // out of range. Must have no emulation side effects.
+    virtual bool peek(uint32_t /*addr*/, void* /*out*/, uint32_t /*len*/) const { return false; }
 };
 
 }  // namespace prismatic

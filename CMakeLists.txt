@@ -58,6 +58,7 @@ if(PRISMATIC_ENABLE_MELONDS)
   add_subdirectory(third_party/melonDS ${CMAKE_BINARY_DIR}/melonDS EXCLUDE_FROM_ALL)
   add_subdirectory(emulation/melonds)
   add_subdirectory(tools/nds-harness)
+  add_subdirectory(tools/nds-pilot)
 endif()
 
 # ---- Optional: real Game Boy Color backend (SameBoy core) -----------------
@@ -85,5 +86,8 @@ add_subdirectory(tools/crystal-recomp)
 # Discovers mods/<id>/manifest.json (the built-in voxel diorama renderer ships
 # as the reference graphics mod). Core-only, builds in any configuration.
 add_subdirectory(tools/mod-manager)
+
+# ---- Prism CLI: game library, ROM identity, VCDIFF mod profiles (core-only) --
+add_subdirectory(tools/prism-cli)
 
 message(STATUS "PRISMATIC configured: build type=${CMAKE_BUILD_TYPE}, compiler=${CMAKE_CXX_COMPILER_ID}")

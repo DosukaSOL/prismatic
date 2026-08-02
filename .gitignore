@@ -2,7 +2,16 @@
 local_data/
 local_reports/
 roms/
+private/
+extracted/
+generated_game_data/
+private_reports/
+private_screenshots/
+private_saves/
+private_states/
+captures/private/
 *.nds
+*.srl
 *.gba
 *.gbc
 *.gb
@@ -14,6 +23,9 @@ roms/
 *.firmware
 *.srm
 *.rtc
+*.xdelta
+*.bps
+*.ips
 
 # ---- Build outputs ----
 build/

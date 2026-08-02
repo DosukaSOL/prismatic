@@ -96,12 +96,25 @@ object NativeBridge {
 
     /** Load a real DS ROM. [dataDir] must be a writable app directory (saves/firmware). */
     external fun nativeLoadRom(romPath: String, dataDir: String): Boolean
+    /** Load with the battery save pinned to an exact file (platform installs). */
+    external fun nativeLoadRomWithSave(romPath: String, dataDir: String, savePath: String): Boolean
 
     /** Return to the first-party synthetic demo (no ROM). */
     external fun nativeUnloadRom()
 
     /** Force the loaded game's battery save to disk now (used by "Save & Close"). */
     external fun nativeFlushSave()
+
+    // ---- game platform (library / ROM identity / mod builds) ----
+    /** JSON identity of a ROM file (sha256/title/gameCode/verdict/...). */
+    external fun nativeIdentifyRom(path: String): String
+    /** Apply a VCDIFF patch; returns "" on success or an error message. */
+    external fun nativeApplyPatch(sourcePath: String, patchPath: String, outPath: String): String
+    /** Streamed SHA-256 of a file ("" on I/O failure). */
+    external fun nativeFileSha256(path: String): String
+    /** Full-machine save state to/from a file. */
+    external fun nativeSaveState(path: String): Boolean
+    external fun nativeLoadState(path: String): Boolean
 
     /** Internal title of the loaded game, or empty when none is loaded. */
     external fun nativeGameTitle(): String

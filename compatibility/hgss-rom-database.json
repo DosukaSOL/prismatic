@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "family": "pokemon-hgss",
+  "note": "Hashes listed only for dumps verified end-to-end on this project's own pipeline (boot + save + mod build). Header identification (gameCode+revision) covers the remaining retail set as 'Identified'. No ROM data is stored here — identities only.",
+  "roms": [
+    {
+      "edition": "heartgold",
+      "displayName": "Pokémon HeartGold",
+      "gameCode": "IPKE",
+      "revision": 0,
+      "language": "English",
+      "region": "USA",
+      "sha256": "65f02a56842b75aa92d775d56d657a56fe3fa993550b04dc20704ab82d760105",
+      "sizeBytes": 134217728,
+      "status": "Verified",
+      "emulation": "Verified",
+      "nativeRuntime": "Not Available",
+      "modSupport": "Full (Visual+ 1.0.0)",
+      "lastValidated": "2026-08-02",
+      "validatedOn": "macOS host (melonDS core); AYN Thor device test pending"
+    },
+    {
+      "edition": "soulsilver",
+      "displayName": "Pokémon SoulSilver",
+      "gameCode": "IPGE",
+      "revision": 0,
+      "language": "English",
+      "region": "USA",
+      "sha256": "51d0f94a16af7d77c067b4cb7d821ba890a13203a2e2c76049623332c0582e20",
+      "sizeBytes": 134217728,
+      "status": "Verified",
+      "emulation": "Verified",
+      "nativeRuntime": "Not Available",
+      "modSupport": "Full (Visual+ 1.0.0)",
+      "lastValidated": "2026-08-02",
+      "validatedOn": "macOS host (melonDS core); AYN Thor device test pending"
+    },
+    { "edition": "heartgold", "displayName": "Pokémon HeartGold", "gameCode": "IPKJ", "revision": 0, "language": "Japanese", "region": "Japan", "status": "Identified", "emulation": "Untested", "modSupport": "No Compatible Mods" },
+    { "edition": "heartgold", "displayName": "Pokémon HeartGold", "gameCode": "IPKP", "revision": 0, "language": "English", "region": "Europe", "status": "Identified", "emulation": "Untested", "modSupport": "No Compatible Mods" },
+    { "edition": "heartgold", "displayName": "Pokémon HeartGold", "gameCode": "IPKD", "revision": 0, "language": "German", "region": "Europe", "status": "Identified", "emulation": "Untested", "modSupport": "No Compatible Mods" },
+    { "edition": "heartgold", "displayName": "Pokémon HeartGold", "gameCode": "IPKF", "revision": 0, "language": "French", "region": "Europe", "status": "Identified", "emulation": "Untested", "modSupport": "No Compatible Mods" },
+    { "edition": "heartgold", "displayName": "Pokémon HeartGold", "gameCode": "IPKI", "revision": 0, "language": "Italian", "region": "Europe", "status": "Identified", "emulation": "Untested", "modSupport": "No Compatible Mods" },
+    { "edition": "heartgold", "displayName": "Pokémon HeartGold", "gameCode": "IPKS", "revision": 0, "language": "Spanish", "region": "Europe", "status": "Identified", "emulation": "Untested", "modSupport": "No Compatible Mods" },
+    { "edition": "heartgold", "displayName": "Pokémon HeartGold", "gameCode": "IPKK", "revision": 0, "language": "Korean", "region": "Korea", "status": "Identified", "emulation": "Untested", "modSupport": "No Compatible Mods" },
+    { "edition": "soulsilver", "displayName": "Pokémon SoulSilver", "gameCode": "IPGJ", "revision": 0, "language": "Japanese", "region": "Japan", "status": "Identified", "emulation": "Untested", "modSupport": "No Compatible Mods" },
+    { "edition": "soulsilver", "displayName": "Pokémon SoulSilver", "gameCode": "IPGP", "revision": 0, "language": "English", "region": "Europe", "status": "Identified", "emulation": "Untested", "modSupport": "No Compatible Mods" },
+    { "edition": "soulsilver", "displayName": "Pokémon SoulSilver", "gameCode": "IPGD", "revision": 0, "language": "German", "region": "Europe", "status": "Identified", "emulation": "Untested", "modSupport": "No Compatible Mods" },
+    { "edition": "soulsilver", "displayName": "Pokémon SoulSilver", "gameCode": "IPGF", "revision": 0, "language": "French", "region": "Europe", "status": "Identified", "emulation": "Untested", "modSupport": "No Compatible Mods" },
+    { "edition": "soulsilver", "displayName": "Pokémon SoulSilver", "gameCode": "IPGI", "revision": 0, "language": "Italian", "region": "Europe", "status": "Identified", "emulation": "Untested", "modSupport": "No Compatible Mods" },
+    { "edition": "soulsilver", "displayName": "Pokémon SoulSilver", "gameCode": "IPGS", "revision": 0, "language": "Spanish", "region": "Europe", "status": "Identified", "emulation": "Untested", "modSupport": "No Compatible Mods" },
+    { "edition": "soulsilver", "displayName": "Pokémon SoulSilver", "gameCode": "IPGK", "revision": 0, "language": "Korean", "region": "Korea", "status": "Identified", "emulation": "Untested", "modSupport": "No Compatible Mods" }
+  ]
+}

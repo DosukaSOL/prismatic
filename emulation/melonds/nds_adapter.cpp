@@ -17,9 +17,12 @@
 #include "NDS.h"
 #include "NDSCart.h"
 #include "GPU.h"
+#include "GPU3D.h"
 #include "SPU.h"
+#include "RTC.h"
 #include "ARMJIT.h"
 #include "Platform.h"
+#include "Savestate.h"
 
 namespace prismatic {
 namespace {
@@ -68,7 +71,7 @@ public:
     }
 
     bool init(const std::string& romPath, const std::string& dataDir, std::string* error,
-              bool enableJit);
+              bool enableJit, const std::string& savePathOverride = "");
 
     AdapterInfo info() const override {
         AdapterInfo i;
@@ -138,6 +141,62 @@ public:
     const FloatBuffer* depthBuffer(int screen) const override {
         if (!hasDepth_ || screen != depthScreen_) return nullptr;
         return &depth_;
+    }
+
+    // Full-machine save states via melonDS's serializer.
+    bool saveState(const std::string& path) override {
+        if (!nds_) return false;
+        melonDS::Savestate st;
+        if (st.Error || !nds_->DoSavestate(&st) || st.Error) return false;
+        std::ofstream o(path, std::ios::binary | std::ios::trunc);
+        if (!o) return false;
+        o.write(reinterpret_cast<const char*>(st.Buffer()), (std::streamsize)st.Length());
+        return (bool)o;
+    }
+
+    bool loadState(const std::string& path) override {
+        if (!nds_) return false;
+        std::ifstream f(path, std::ios::binary | std::ios::ate);
+        if (!f) return false;
+        std::streamsize sz = f.tellg();
+        if (sz <= 0) return false;
+        f.seekg(0);
+        std::vector<uint8_t> buf((size_t)sz);
+        if (!f.read(reinterpret_cast<char*>(buf.data()), sz)) return false;
+        melonDS::Savestate st(buf.data(), (uint32_t)sz, false);
+        if (st.Error || !nds_->DoSavestate(&st) || st.Error) return false;
+        readFramebuffers();
+        return true;
+    }
+
+    // Side-effect-free reads of emulated main RAM (0x02000000 mirror range).
+    // Data-driven game profiles use this for map/state probes.
+    bool peek(uint32_t addr, void* out, uint32_t len) const override {
+        if (!nds_ || !out || len == 0) return false;
+        if (addr < 0x02000000u) return false;
+        uint32_t off = (addr - 0x02000000u) & nds_->MainRAMMask;
+        if ((uint64_t)off + len > (uint64_t)nds_->MainRAMMask + 1) return false;
+        std::memcpy(out, nds_->MainRAM + off, len);
+        return true;
+    }
+
+    SceneStream sceneStream(int screen) const override {
+        SceneStream s;
+        s.width = kDsW;
+        s.height = kDsH;
+        s.frameIndex = frame_;
+        s.depth = depthBuffer(screen);
+        if (s.depth) s.depthAbs = &depthAbs_;
+        // Layer provenance for the 2D engine composited to this screen.
+        // GBATEK POWCNT1 bit15: 1 = engine A on the upper screen (ScreenSwap).
+        if (nds_) {
+            bool topIsA = (nds_->GPU.ScreenSwap != 0);
+            int unit = (screen == (int)ScreenId::Top) == topIsA ? 0 : 1;
+            if (layerMaskValid_[unit]) s.layerMask = layerMask_[unit].data();
+        }
+        s.camera = camera_;
+        s.time = time_;
+        return s;
     }
 
     // Pull decoded stereo audio from the SPU. Called on the audio thread; the
@@ -216,6 +275,49 @@ private:
         convert(reinterpret_cast<const uint32_t*>(topp), top_);
         convert(reinterpret_cast<const uint32_t*>(botp), bottom_);
         readDepth();
+        readLayerMasks();
+        readCamera();
+        readTime();
+    }
+
+    // Copy the per-pixel layer-provenance bytes both 2D engines produced.
+    void readLayerMasks() {
+        auto& rend = nds_->GPU.GetRenderer();
+        for (int unit = 0; unit < 2; ++unit) {
+            layerMaskValid_[unit] = false;
+            if (layerMask_[unit].size() != (size_t)kDsPixels)
+                layerMask_[unit].resize((size_t)kDsPixels);
+            bool any = false;
+            for (int y = 0; y < kDsH; ++y) {
+                uint8_t* line = rend.GetLayerMaskLine(unit, y);
+                if (!line) return;
+                std::memcpy(&layerMask_[unit][(size_t)y * kDsW], line, kDsW);
+                any = true;
+            }
+            layerMaskValid_[unit] = any;
+        }
+    }
+
+    // Capture the geometry engine's matrices as they stand at end of frame.
+    // DS games reload the camera each frame, so the position-matrix stack
+    // bottom is the game's view matrix in the overwhelmingly common case.
+    void readCamera() {
+        camera_.valid = false;
+        auto& g3d = nds_->GPU.GPU3D;
+        if (!g3d.RenderingEnabled) return;
+        auto fx = [](int32_t v) { return (float)v / 4096.0f; };  // 20.12 fixed
+        for (int i = 0; i < 16; ++i) {
+            camera_.proj[i] = fx(g3d.ProjMatrix[i]);
+            camera_.viewStack0[i] = fx(g3d.PosMatrixStack[0][i]);
+            camera_.clip[i] = fx(g3d.ClipMatrix[i]);
+        }
+        camera_.valid = true;
+    }
+
+    void readTime() {
+        nds_->RTC.GetDateTime(time_.year, time_.month, time_.day,
+                              time_.hour, time_.minute, time_.second);
+        time_.valid = true;
     }
 
     // Copy the 3D rasteriser's 24-bit depth into a normalised 0(near)..1(far)
@@ -243,12 +345,18 @@ private:
         if (!any || hi <= lo || (hi - lo) < kMinSpan) return;
 
         if (depth_.width != kDsW || depth_.height != kDsH) depth_ = FloatBuffer(kDsW, kDsH);
+        if (depthAbs_.width != kDsW || depthAbs_.height != kDsH) depthAbs_ = FloatBuffer(kDsW, kDsH);
         const float inv = 1.0f / (float)(hi - lo);
+        constexpr float kInv24 = 1.0f / 16777215.0f;
         for (int y = 0; y < kDsH; ++y) {
             uint32_t* dl = rend.GetDepth3DLine(y);
             float* out = &depth_.data[(size_t)y * kDsW];
-            for (int x = 0; x < kDsW; ++x)
-                out[x] = (float)((dl[x] & 0x00FFFFFFu) - lo) * inv;  // 0 near .. 1 far
+            float* outAbs = &depthAbs_.data[(size_t)y * kDsW];
+            for (int x = 0; x < kDsW; ++x) {
+                uint32_t z = dl[x] & 0x00FFFFFFu;
+                out[x] = (float)(z - lo) * inv;  // 0 near .. 1 far
+                outAbs[x] = (float)z * kInv24;   // absolute rasteriser depth
+            }
         }
         // Engine A carries the 3D; it maps to the top screen only when swapped.
         depthScreen_ = nds_->GPU.ScreenSwap ? (int)ScreenId::Top : (int)ScreenId::Bottom;
@@ -264,8 +372,13 @@ private:
     Image top_{kDsW, kDsH};
     Image bottom_{kDsW, kDsH};
     FloatBuffer depth_;            // normalised 0(near)..1(far) for depthScreen_
+    FloatBuffer depthAbs_;         // absolute 24-bit depth / 0xFFFFFF
     int depthScreen_ = -1;        // ScreenId of the screen the 3D is drawn to
     bool hasDepth_ = false;       // false => no usable 3D depth this frame
+    std::vector<uint8_t> layerMask_[2];  // per 2D engine unit (A, B)
+    bool layerMaskValid_[2] = {false, false};
+    CameraCapture camera_;
+    EmuDateTime time_;
     InputState input_;
     uint64_t frame_ = 0;
     GameIdentity id_;
@@ -274,7 +387,7 @@ private:
 };
 
 bool NdsAdapter::init(const std::string& romPath, const std::string& dataDir, std::string* error,
-                      bool enableJit) {
+                      bool enableJit, const std::string& savePathOverride) {
     auto fail = [&](const std::string& m) { if (error) *error = m; return false; };
 
     // Platform layer: where melonDS reads/writes (firmware, temp) and how saves
@@ -322,8 +435,10 @@ bool NdsAdapter::init(const std::string& romPath, const std::string& dataDir, st
 
     // Battery saves live in a stable, user-visible folder keyed by game code +
     // a short ROM hash, so re-opening the same game always finds its save and
-    // continues where the player left off (auto-load below).
-    savePath_ = computeSavePath(dataDir);
+    // continues where the player left off (auto-load below). The platform
+    // overrides this with one pinned file per install, so switching mod builds
+    // (whose hashes differ) never forks the player's save.
+    savePath_ = savePathOverride.empty() ? computeSavePath(dataDir) : savePathOverride;
     loadSaveIfPresent();
 
     nds_->Reset();
@@ -340,9 +455,10 @@ bool NdsAdapter::init(const std::string& romPath, const std::string& dataDir, st
 std::unique_ptr<EmulatorAdapter> makeNdsAdapter(const std::string& romPath,
                                                 const std::string& dataDir,
                                                 std::string* error,
-                                                bool enableJit) {
+                                                bool enableJit,
+                                                const std::string& savePathOverride) {
     auto a = std::make_unique<NdsAdapter>();
-    if (!a->init(romPath, dataDir, error, enableJit)) return nullptr;
+    if (!a->init(romPath, dataDir, error, enableJit, savePathOverride)) return nullptr;
     return a;
 }
 

@@ -87,9 +87,15 @@ class MainActivity : Activity() {
     private var studioOverlay: View? = null
     private var gamesOverlay: View? = null
     private var remapOverlay: View? = null
+    private var gamePageOverlay: View? = null
     private var homeVisible = false
     private var menuVisible = false
     private var homeFirstButton: View? = null
+
+    // ---- Game platform ------------------------------------------------------
+    private lateinit var store: GameStore
+    private var runningInstallId = ""    // GameStore id of the running game ("" = legacy/none)
+    private var homeGamesColumn: LinearLayout? = null
 
     // Pause-menu buttons that reflect state.
     private lateinit var btn25D: Button
@@ -111,6 +117,8 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         enterImmersive()
+        store = GameStore(this)
+        store.load()
 
         if (!NativeBridge.nativeInit()) {
             val err = TextView(this).apply {
@@ -220,9 +228,15 @@ class MainActivity : Activity() {
 
         val buttons = Brand.column(this).apply {
             layoutParams = LinearLayout.LayoutParams(
-                Brand.dp(context, 340f), ViewGroup.LayoutParams.WRAP_CONTENT
+                Brand.dp(context, 380f), ViewGroup.LayoutParams.WRAP_CONTENT
             )
         }
+        // Installed games first — the home screen is the game library.
+        homeGamesColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        buttons.addView(homeGamesColumn, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        rebuildHomeGames()
+
         fun add(b: Button, topDp: Float = 12f) {
             buttons.addView(
                 b, LinearLayout.LayoutParams(
@@ -230,8 +244,11 @@ class MainActivity : Activity() {
                 ).apply { topMargin = Brand.dp(this@MainActivity, topDp) }
             )
         }
-        add(Brand.primaryButton(this, "Open Game") { pickRom() }.also { homeFirstButton = it }, 0f)
-        add(Brand.ghostButton(this, "Games") { openGames() })
+        add(Brand.ghostButton(this, "Add Game") { pickRomForImport() }.apply {
+            setCompoundDrawables(Icons.sized(context, Icons.add(Brand.TEXT), 18f), null, null, null)
+            compoundDrawablePadding = Brand.dp(context, 10f)
+        })
+        add(Brand.ghostButton(this, "Quick open (no install)") { pickRom() })
         add(Brand.ghostButton(this, "Shader Studio") { openStudio() })
         btnHomeSpeed = Brand.ghostButton(this, speedLabel()) {
             jitOn = !jitOn; NativeBridge.nativeSetJit(jitOn); savePrefs()
@@ -239,7 +256,10 @@ class MainActivity : Activity() {
             if (gameLoaded) toast("Applies on next load")
         }
         add(btnHomeSpeed!!)
-        add(Brand.ghostButton(this, "Quit Prismatic") { finishAffinity() })
+        add(Brand.ghostButton(this, "Exit Prismatic") { exitPrismatic() }.apply {
+            setCompoundDrawables(Icons.sized(context, Icons.exit(Brand.TEXT_MUTED), 18f), null, null, null)
+            compoundDrawablePadding = Brand.dp(context, 10f)
+        })
         col.addView(buttons)
 
         val footer = TextView(this).apply {
@@ -266,6 +286,7 @@ class MainActivity : Activity() {
         homeVisible = show
         homeScreen.visibility = if (show) View.VISIBLE else View.GONE
         if (show) {
+            rebuildHomeGames()
             btnHomeSpeed?.text = speedLabel()
             (homeScreen.getTag(R.id.tag_home_logo) as? View)?.let { Brand.popIn(it, 40) }
             (homeScreen.getTag(R.id.tag_home_col) as? ViewGroup)?.let { c ->
@@ -275,6 +296,152 @@ class MainActivity : Activity() {
         }
         updatePaused()
         if (!show) enterImmersive()
+    }
+
+    // ======================================================================
+    //  Game platform: library cards, import, game pages
+    // ======================================================================
+
+    /** Rebuild the installed-game cards (called whenever the home shows). */
+    private fun rebuildHomeGames() {
+        val colGames = homeGamesColumn ?: return
+        colGames.removeAllViews()
+        homeFirstButton = null
+        for (g in store.games.sortedByDescending { it.lastPlayedMs }) {
+            val card = buildGameCard(g)
+            colGames.addView(card, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = Brand.dp(this@MainActivity, 10f) })
+            if (homeFirstButton == null) homeFirstButton = card
+        }
+    }
+
+    /** One installed game = one premium card: edition accent, status, chevron. */
+    private fun buildGameCard(g: GameStore.InstalledGame): View {
+        val accent = if (g.isHeartGold) 0xFFF5A623.toInt() else 0xFF9BB0C9.toInt()
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isClickable = true; isFocusable = true
+            background = Brand.card(16f, ctx = this@MainActivity)
+            val p = Brand.dp(context, 14f)
+            setPadding(p, p, p, p)
+            Brand.attachPress(this)
+            setOnClickListener { openGamePage(g) }
+        }
+        // Edition accent chip (vector, not art).
+        row.addView(View(this).apply {
+            background = Brand.pill(this@MainActivity, accent, 6f)
+        }, LinearLayout.LayoutParams(Brand.dp(this, 6f), Brand.dp(this, 44f)).apply {
+            marginEnd = Brand.dp(this@MainActivity, 12f)
+        })
+        val text = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        text.addView(TextView(this).apply {
+            this.text = g.displayName
+            setTextColor(Brand.TEXT); textSize = 17f
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        val profName = store.profiles.firstOrNull { it.id == g.activeProfile }?.name ?: g.activeProfile
+        text.addView(TextView(this).apply {
+            this.text = "${g.language} · ${g.verdict} · $profName"
+            setTextColor(Brand.TEXT_MUTED); textSize = 12f
+        })
+        row.addView(text, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(ImageView(this).apply {
+            setImageDrawable(Icons.play(accent))
+        }, LinearLayout.LayoutParams(Brand.dp(this, 26f), Brand.dp(this, 26f)))
+        return row
+    }
+
+    private fun openGamePage(g: GameStore.InstalledGame) {
+        closeGamePage()
+        val page = GamePage(
+            activity = this,
+            store = store,
+            game = g,
+            isRunningThis = { gameLoaded && runningInstallId == g.id },
+            onPlay = { launchInstalled(it) },
+            onBack = { closeGamePage(); showHome(true) },
+        ).build()
+        gamePageOverlay = page
+        root.addView(page)
+        homeScreen.visibility = View.GONE
+        homeVisible = false
+        updatePaused()
+    }
+
+    private fun closeGamePage() {
+        gamePageOverlay?.let { root.removeView(it) }
+        gamePageOverlay = null
+        updatePaused()
+    }
+
+    /** Launch an installed game: pinned per-install save, verified play ROM. */
+    private fun launchInstalled(g: GameStore.InstalledGame) {
+        val rom = File(g.playRomPath)
+        if (!rom.exists()) { toast("Build missing — re-select the mod profile"); return }
+        val savePath = File(g.savesDir, "main.sav").absolutePath
+        if (!NativeBridge.nativeLoadRomWithSave(rom.absolutePath, saveDir(), savePath)) {
+            toast("Could not start ${g.displayName}")
+            return
+        }
+        runningInstallId = g.id
+        lastRomPath = rom.absolutePath
+        gameLoaded = true
+        g.lastPlayedMs = System.currentTimeMillis()
+        store.save()
+        resetSpeed()
+        savePrefs()
+        applyPerGameLook()
+        closeGamePage()
+        showHome(false); showMenu(false)
+        closeStudio(); closeGames()
+    }
+
+    /** SAF picker for the platform import flow (Add Game). */
+    private fun pickRomForImport() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        try {
+            startActivityForResult(intent, IMPORT_PICK_REQUEST)
+        } catch (e: Exception) {
+            toast("No file picker available: ${e.message}")
+        }
+    }
+
+    /** Import: copy privately, hash, identify, verify — then open the game page. */
+    private fun importRomFromUri(uri: Uri) {
+        val name = queryDisplayName(uri) ?: "game.nds"
+        toast("Importing $name…")
+        Thread {
+            val result = try {
+                val stream = contentResolver.openInputStream(uri)
+                if (stream == null) GameStore.ImportResult.Rejected("Could not open the selected file")
+                else store.importRom(stream, name)
+            } catch (e: Exception) {
+                GameStore.ImportResult.Rejected("Import failed: ${e.message}")
+            }
+            runOnUiThread {
+                when (result) {
+                    is GameStore.ImportResult.Ok -> {
+                        toast("${result.game.displayName} installed")
+                        rebuildHomeGames()
+                        openGamePage(result.game)
+                    }
+                    is GameStore.ImportResult.Rejected -> toast(result.reason)
+                }
+            }
+        }.start()
+    }
+
+    /** Lower physical screen: DS touch UI only during live gameplay, otherwise
+     *  the official Prismatic logo (home + management screens). */
+    private fun updateLowerScreenMode() {
+        val playing = gameLoaded && !homeVisible && gamesOverlay == null &&
+            remapOverlay == null && gamePageOverlay == null
+        presentation?.setGameMode(playing)
     }
 
     // ======================================================================
@@ -337,6 +504,7 @@ class MainActivity : Activity() {
         section("Close")
         menuButton("Save & Close") { closeGame(save = true) }
         menuButton("Close (no save)") { closeGame(save = false) }
+        menuButton("Exit Prismatic") { exitPrismatic() }
 
         val hint = TextView(this).apply {
             text = "Saves → Android/data/com.prismatic.app/files/saves"
@@ -877,9 +1045,11 @@ class MainActivity : Activity() {
     }
 
     private fun updatePaused() {
-        val paused = homeVisible || menuVisible || (gamesOverlay != null) || (remapOverlay != null)
+        val paused = homeVisible || menuVisible || (gamesOverlay != null) ||
+            (remapOverlay != null) || (gamePageOverlay != null)
         topView.paused = paused
         bottomInline.paused = paused
+        updateLowerScreenMode()
     }
 
     private fun presetIndexByName(name: String): Int {
@@ -924,7 +1094,22 @@ class MainActivity : Activity() {
         gameLoaded = false
         resetSpeed()
         showMenu(false)
-        showHome(true)
+        // Installed games return to their own management page; legacy quick-open
+        // returns to the home library.
+        val g = if (runningInstallId.isNotEmpty()) store.find(runningInstallId) else null
+        runningInstallId = ""
+        if (g != null) openGamePage(g) else showHome(true)
+    }
+
+    /** Clean, complete exit: flush save, stop audio/threads, drop the lower-
+     *  screen window, then remove this task from Recents entirely. */
+    private fun exitPrismatic() {
+        if (gameLoaded) NativeBridge.nativeFlushSave()
+        audio.stop()
+        presentation?.dismiss()
+        presentation = null
+        savePrefs()
+        finishAndRemoveTask()
     }
 
     private fun resetGame() {
@@ -962,6 +1147,8 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == ROM_PICK_REQUEST && resultCode == RESULT_OK) {
             data?.data?.let { loadRomFromUri(it) }
+        } else if (requestCode == IMPORT_PICK_REQUEST && resultCode == RESULT_OK) {
+            data?.data?.let { importRomFromUri(it) }
         } else if (requestCode == FOLDER_PICK_REQUEST && resultCode == RESULT_OK) {
             data?.data?.let { uri ->
                 try {
@@ -1226,7 +1413,8 @@ class MainActivity : Activity() {
                 remapOverlay != null -> closeRemap()
                 studioOverlay != null -> closeStudio()
                 gamesOverlay != null -> closeGames()
-                homeVisible -> finishAffinity()          // Back on home exits Prismatic
+                gamePageOverlay != null -> { closeGamePage(); showHome(true) }
+                homeVisible -> exitPrismatic()           // Back on home exits + removes task
                 gameLoaded -> showMenu(!menuVisible)
                 else -> showHome(true)
             }
@@ -1588,6 +1776,7 @@ class MainActivity : Activity() {
         if (secondary != null) {
             bottomInline.visibility = View.GONE
             presentation = SecondaryPresentation(this, secondary, shared).also { it.show() }
+            updateLowerScreenMode()
         } else {
             bottomInline.visibility = View.VISIBLE
         }
@@ -1602,9 +1791,33 @@ class MainActivity : Activity() {
         super.onPause()
     }
 
+    // onStop is the last callback guaranteed before the system may kill the
+    // process (e.g. the user swipes Prismatic away in Recents) — battery saves
+    // MUST be on disk by the time it returns.
+    override fun onStop() {
+        if (gameLoaded) NativeBridge.nativeFlushSave()
+        savePrefs()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        // Belt-and-braces teardown so no window token, audio track or render
+        // thread outlives the task (root cause of the stuck Recents card).
+        audio.stop()
+        presentation?.dismiss()
+        presentation = null
+        if (gameLoaded) {
+            NativeBridge.nativeFlushSave()
+            NativeBridge.nativeUnloadRom()
+            gameLoaded = false
+        }
+        super.onDestroy()
+    }
+
     companion object {
         private const val ROM_PICK_REQUEST = 0x2001
         private const val FOLDER_PICK_REQUEST = 0x2002
+        private const val IMPORT_PICK_REQUEST = 0x2003
         private const val PREFS = "prismatic"
         private val SPEED_MULTS = intArrayOf(1, 2, 5)
         // Remappable actions in display order: id -> label.
